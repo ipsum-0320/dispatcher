@@ -2,16 +2,16 @@ package main
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"k8s.io/apimachinery/pkg/util/uuid"
+	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/leaderelection"
 	"k8s.io/client-go/tools/leaderelection/resourcelock"
 	"k8s.io/klog/v2"
 	"log"
-	"manager/server"
+	"net/http"
 	"os/signal"
 	"syscall"
 	"time"
@@ -39,20 +39,27 @@ func main() {
 	id := string(uuid.NewUUID())
 
 	run := func(ctx context.Context) {
-		// OnStartedLeading 会传入 ctx，这里的 ctx 是传给 RunOrDie 的 ctx。
-		// http server 应当监听 0.0.0.0。
-		err := errors.New("error")
-		for err != nil {
-			err = server.Serve(ctx, host, int64(port))
+		// 确立心跳检测服务。
+		http.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
+			_, err := fmt.Fprintf(w, "Alive")
+			if err != nil {
+				log.Fatalf("error writing response: %v", err)
+			}
+		})
+		if err := http.ListenAndServe(fmt.Sprintf("%s:%d", host, port), nil); err != nil {
+			fmt.Println("server serve failed:", err)
 		}
-		fmt.Printf("server started\n")
+		// 创建一个定时任务，每隔 15 分钟执行一次。
+		wait.Until(func() {
+			Process()
+		}, 15*time.Minute, ctx.Done())
 	}
 
 	// 创建分布式锁。
 	rl, err := resourcelock.New(
 		resourcelock.LeasesResourceLock,
 		ns,
-		"manager-lock",
+		"predict-lock",
 		c.CoreV1(),
 		c.CoordinationV1(),
 		resourcelock.ResourceLockConfig{
@@ -74,6 +81,6 @@ func main() {
 			},
 		},
 		WatchDog: nil,
-		Name:     "manager",
+		Name:     "predict",
 	})
 }
