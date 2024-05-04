@@ -51,7 +51,11 @@ func main() {
 		}
 		// 创建一个定时任务，每隔 15 分钟执行一次。
 		wait.Until(func() {
-			Process()
+			err := Process()
+			if err != nil {
+				fmt.Printf("process failed, err:%v\n", err)
+				return
+			}
 		}, 15*time.Minute, ctx.Done())
 	}
 
