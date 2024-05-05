@@ -8,7 +8,10 @@ import (
 	"predict/timesnet"
 )
 
-func Process() error {
+func Process(zoneId string) error {
+	replica := int32(0)
+
+	// TODO: 对 zoneId 下的所有 siteId 都要做预测。
 	rows, err := mysql.DB.Query("")
 	if err != nil {
 		fmt.Printf("query failed, err:%v\n", err)
@@ -50,13 +53,21 @@ func Process() error {
 		return err
 	}
 
-	predResponse, err := timesnet.Predict(predMap)
+	predResponse, err := timesnet.Predict(predMap, "hangzhou")
 	if err != nil {
 		fmt.Printf("predict failed, err:%v\n", err)
 		return err
 	}
 
-	// TODO
-	manager.Manage(predResponse)
+	// TODO: 这里的 predResponse 是单独的 predResponse，获取将要释放或者申请的实例数目。
+	calc, err := manager.Calc(predResponse, "hangzhou")
+	if err != nil {
+		fmt.Printf("calc failed, err:%v\n", err)
+		return err
+	}
+
+	replica += calc
+
+	err = manager.Manage(zoneId, replica)
 	return nil
 }

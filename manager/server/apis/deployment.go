@@ -19,7 +19,7 @@ var (
 
 func deploymentFactory(
 	name string,
-	siteId string,
+	zoneId string,
 ) *appsv1.Deployment {
 	defaultDeploymentReplicas := int32(0)
 
@@ -27,20 +27,20 @@ func deploymentFactory(
 		ObjectMeta: metav1.ObjectMeta{
 			Name: name,
 			Labels: map[string]string{
-				"Site_id": siteId,
+				"Zone_id": zoneId,
 			},
 		},
 		Spec: appsv1.DeploymentSpec{
 			Replicas: &defaultDeploymentReplicas,
 			Selector: &metav1.LabelSelector{
 				MatchLabels: map[string]string{
-					"Site_id": siteId,
+					"Zone_id": zoneId,
 				},
 			},
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
 					Labels: map[string]string{
-						"Site_id": siteId,
+						"Zone_id": zoneId,
 					},
 				},
 				Spec: corev1.PodSpec{
@@ -65,7 +65,7 @@ func deploymentFactory(
 
 type DeploymentApplyRequest struct {
 	DeploymentName string
-	SiteId         string
+	ZoneId         string
 	Replica        int32
 }
 
@@ -96,7 +96,7 @@ func DeploymentApply(w http.ResponseWriter, r *http.Request) {
 	}
 	if dp == nil {
 		// 不存在，创建 deployment。
-		deployment := deploymentFactory(deploymentName, reqBody.SiteId)
+		deployment := deploymentFactory(deploymentName, reqBody.ZoneId)
 		_, err = k8s_client.Client.AppsV1().Deployments(namespace).Create(context.TODO(), deployment, metav1.CreateOptions{})
 		if err != nil {
 			fmt.Printf("Failed to create deployment: %v\n", err)
@@ -139,8 +139,8 @@ type DeploymentPodWatchResponse struct {
 func DeploymentPodWatch(w http.ResponseWriter, r *http.Request) {
 	// 通过 watch 的方式监听 deployment 下的 pod。
 	deploymentName := r.URL.Query().Get("deploymentName")
-	siteId := r.URL.Query().Get("siteId")
-	if len(deploymentName) == 0 || len(siteId) == 0 {
+	zoneId := r.URL.Query().Get("zoneId")
+	if len(deploymentName) == 0 || len(zoneId) == 0 {
 		SendErrorResponse(w, &ErrorCodeWithMessage{
 			HttpStatus: http.StatusBadRequest,
 			ErrorCode:  400,
@@ -162,7 +162,7 @@ func DeploymentPodWatch(w http.ResponseWriter, r *http.Request) {
 	replica := dp.Spec.Replicas
 	// 通过 label selector 来筛选 pod。
 	pods, err := k8s_client.Client.CoreV1().Pods(namespace).List(context.TODO(), metav1.ListOptions{
-		LabelSelector: fmt.Sprintf("Site_id=%d", replica),
+		LabelSelector: fmt.Sprintf("Zone_id=%s", zoneId),
 	})
 	if err != nil {
 		fmt.Printf("Failed to list pods: %v\n", err)

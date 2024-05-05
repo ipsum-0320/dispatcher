@@ -13,6 +13,8 @@ import (
 	"log"
 	"net/http"
 	"os/signal"
+	_ "predict/manager"
+	_ "predict/mysql"
 	"syscall"
 	"time"
 )
@@ -51,7 +53,7 @@ func main() {
 		}
 		// 创建一个定时任务，每隔 15 分钟执行一次。
 		wait.Until(func() {
-			err := Process()
+			err := Process("huadong")
 			if err != nil {
 				fmt.Printf("process failed, err:%v\n", err)
 				return

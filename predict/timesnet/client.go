@@ -35,7 +35,7 @@ type PredDataResponse struct {
 	Pred   []float64
 }
 
-func Predict(source PredDataSource) (*PredDataResponse, error) {
+func Predict(source PredDataSource, siteId string) (*PredDataResponse, error) {
 	csvPath, err := source2csv(source)
 	if err != nil {
 		fmt.Println("Error converting source to CSV:", err)
@@ -73,7 +73,8 @@ func Predict(source PredDataSource) (*PredDataResponse, error) {
 		return nil, err
 	}
 
-	url := fmt.Sprintf("%s://%s:%d%s", protocol, host, port, path)
+	url := fmt.Sprintf("%s://%s:%d%s/%s", protocol, host, port, path, siteId)
+	// 对于每个边缘站点的预测，都会有一个对应的请求路径，siteId 用作区分。
 	req, err := http.NewRequest("POST", url, &reqBody)
 	if err != nil {
 		fmt.Println("Error creating request:", err)
