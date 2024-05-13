@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"k8s.io/apimachinery/pkg/util/uuid"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -14,6 +15,7 @@ import (
 	"net/http"
 	"os/signal"
 	_ "predict/manager"
+	"predict/mysql"
 	_ "predict/mysql"
 	"syscall"
 	"time"
@@ -40,6 +42,19 @@ func main() {
 
 	id := string(uuid.NewUUID())
 
+	// TODO: 需要查询数据库，获取所有的 zoneId。
+	rows, err := mysql.DB.Query("")
+	if err != nil {
+		fmt.Printf("query failed, err:%v\n", err)
+		return
+	}
+	defer func(query *sql.Rows) {
+		err := query.Close()
+		if err != nil {
+			fmt.Printf("close query failed, err:%v\n", err)
+		}
+	}(rows)
+
 	run := func(ctx context.Context) {
 		// 确立心跳检测服务。
 		http.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
@@ -53,6 +68,7 @@ func main() {
 		}
 		// 创建一个定时任务，每隔 15 分钟执行一次。
 		wait.Until(func() {
+			// TODO: 具体的 zoneId 要从数据库中去拿，这里的 Process 要多协程。
 			err := Process("huadong")
 			if err != nil {
 				fmt.Printf("process failed, err:%v\n", err)

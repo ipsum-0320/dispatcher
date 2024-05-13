@@ -1,12 +1,20 @@
 package manager
 
 import (
+	"bytes"
+	"database/sql"
+	"encoding/json"
 	"fmt"
 	"gopkg.in/yaml.v3"
+	"io"
+	"math"
+	"net/http"
 	"os"
 	"path/filepath"
+	"predict/mysql"
 	"predict/timesnet"
 	"runtime"
+	"time"
 )
 
 // manager 通过 k8s 部署，因此最好使用 configmap 获取 manager 的相关配置。
@@ -42,29 +50,148 @@ func init() {
 }
 
 func Calc(predResponse *timesnet.PredDataResponse, siteId string) (int32, error) {
-	// TODO: 查询目前当前边缘站点可以容纳多少实例（在不申请弹性资源的情况下）。
-
-	// TODO: 计算将要释放或者申请的实例数目。
-	return 0, nil
+	// 1. 拿到预测值中的最大值。
+	maxPred := math.SmallestNonzeroFloat64
+	for _, pred := range predResponse.Pred {
+		maxPred = math.Max(maxPred, pred)
+	}
+	// 2. 查询当前边缘站点可以容纳多少实例。
+	rows, err := mysql.DB.Query("")
+	if err != nil {
+		fmt.Printf("query failed, err:%v\n", err)
+		return 0, err
+	}
+	defer func(query *sql.Rows) {
+		err := query.Close()
+		if err != nil {
+			fmt.Printf("close query failed, err:%v\n", err)
+		}
+	}(rows)
+	var (
+		id        int64
+		siteIdDB  string
+		instances int32
+	)
+	if rows.Next() {
+		if err := rows.Scan(&id, &siteIdDB, &instances); err != nil {
+			fmt.Printf("scan failed: %v\n", err)
+			return 0, err
+		}
+	}
+	// TODO-issue: 申请资源之前，要将 k8s 的 pod 状态和表对应一下
+	// replica 属性直接面向终态。
+	return int32(math.Ceil(maxPred - float64(instances))), nil
 }
 
 func Manage(zoneId string, replica int32) error {
-	// TODO: 请求 manager 申请或者释放实例。
+	err := apply(zoneId+"-deploy", zoneId, replica)
+	if err != nil {
+		fmt.Printf("Failed to apply deployment: %v\n", err)
+		return err
+	}
+	loopCount := 0
+	for true {
+		watchRes, err := podWatch(zoneId+"-deploy", zoneId)
+		if err != nil {
+			fmt.Printf("Failed to watch deployment pod: %v\n", err)
+			return err
+		}
+		if watchRes.UnReadyNum == 0 {
+			break
+		}
+		fmt.Printf("Deployment pod not ready, readyNum: %d/%d\n", watchRes.ReadyNum, watchRes.ReadyNum+watchRes.UnReadyNum)
+		loopCount++
+		if loopCount >= 10 {
+			fmt.Printf("Failed to watch deployment pod: timeout\n")
+		}
+		time.Sleep(5 * time.Second)
+	}
 	return nil
 }
 
-type DeploymentApplyRequest struct {
-	DeploymentName string
-	SiteId         string
-	Replica        int32
+func apply(deploymentName, zoneId string, replica int32) error {
+	path := "deployment/apply"
+	url := fmt.Sprintf("%s://%s:%d%s", protocol, managerIP, managerPort, path)
+
+	requestBodyData := map[string]interface{}{
+		"deploymentName": deploymentName,
+		"zoneId":         zoneId,
+		"replica":        replica,
+	}
+
+	jsonData, err := json.Marshal(requestBodyData)
+	if err != nil {
+		fmt.Printf("Failed to marshal request body data: %v\n", err)
+		return err
+	}
+
+	request, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonData))
+	if err != nil {
+		fmt.Printf("Failed to create request: %v\n", err)
+		return err
+	}
+
+	request.Header.Set("Content-Type", "application/json")
+	client := &http.Client{}
+	response, err := client.Do(request)
+	if err != nil {
+		fmt.Printf("Error occurred while sending request. Error: %v\n", err)
+		return err
+	}
+	defer func(Body io.ReadCloser) {
+		err := Body.Close()
+		if err != nil {
+			fmt.Printf("Failed to close response body: %v\n", err)
+		}
+	}(response.Body)
+
+	if response.StatusCode != http.StatusOK {
+		fmt.Printf("Failed to apply deployment: %v\n", response.Status)
+		return fmt.Errorf("failed to apply deployment: %v", response.Status)
+	}
+
+	return nil
 }
 
-func apply() {
-	//path := "deployment/apply"
-	//url := fmt.Sprintf("%s://%s:%d%s", protocol, managerIP, managerPort, path)
-
+type DeploymentPodWatchResponse struct {
+	ReadyNum   int32 `json:"readyNum"`
+	UnReadyNum int32 `json:"unReadyNum"`
 }
 
-func podWatch() {
+func podWatch(deploymentName, zoneId string) (*DeploymentPodWatchResponse, error) {
+	path := "/deployment/pod/watch"
+	url := fmt.Sprintf("%s://%s:%d%s", protocol, managerIP, managerPort, path)
 
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		fmt.Printf("Failed to create request: %v\n", err)
+		return nil, err
+	}
+
+	params := req.URL.Query()
+	params.Add("deploymentName", deploymentName)
+	params.Add("zoneId", zoneId)
+	req.URL.RawQuery = params.Encode()
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, _ := http.DefaultClient.Do(req)
+	defer func(Body io.ReadCloser) {
+		err := Body.Close()
+		if err != nil {
+			fmt.Printf("Failed to close response body: %v\n", err)
+		}
+	}(resp.Body)
+
+	if resp.StatusCode != http.StatusOK {
+		fmt.Printf("Failed to watch deployment pod: %v\n", resp.Status)
+		return nil, fmt.Errorf("failed to watch deployment pod: %v", resp.Status)
+	}
+
+	var responseData DeploymentPodWatchResponse
+	decoder := json.NewDecoder(resp.Body)
+	if err := decoder.Decode(&responseData); err != nil {
+		fmt.Println("Error decoding JSON:", err)
+		return nil, err
+	}
+	return &responseData, nil
 }

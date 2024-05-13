@@ -11,7 +11,7 @@ import (
 func Process(zoneId string) error {
 	replica := int32(0)
 
-	// TODO: 对 zoneId 下的所有 siteId 都要做预测。
+	// TODO: 对 zoneId 下的所有 siteId 都要做预测，这里也可以开多协程。
 	rows, err := mysql.DB.Query("")
 	if err != nil {
 		fmt.Printf("query failed, err:%v\n", err)
@@ -65,9 +65,9 @@ func Process(zoneId string) error {
 		fmt.Printf("calc failed, err:%v\n", err)
 		return err
 	}
-
+	// TODO: 需要保证 replica 的线程安全。
 	replica += calc
-
+	// TODO: 这里是总的中心站点的信息，不可以开多协程。
 	err = manager.Manage(zoneId, replica)
 	return nil
 }

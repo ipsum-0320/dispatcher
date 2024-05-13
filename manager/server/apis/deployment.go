@@ -64,9 +64,9 @@ func deploymentFactory(
 }
 
 type DeploymentApplyRequest struct {
-	DeploymentName string
-	ZoneId         string
-	Replica        int32
+	DeploymentName string `json:"deploymentName"`
+	ZoneId         string `json:"zoneId"`
+	Replica        int32  `json:"replica"`
 }
 
 func DeploymentApply(w http.ResponseWriter, r *http.Request) {
