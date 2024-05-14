@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"gopkg.in/yaml.v3"
 	"io"
 	"math"
 	"net/http"
@@ -15,6 +14,8 @@ import (
 	"predict/timesnet"
 	"runtime"
 	"time"
+
+	"gopkg.in/yaml.v3"
 )
 
 // manager 通过 k8s 部署，因此最好使用 configmap 获取 manager 的相关配置。
@@ -104,6 +105,7 @@ func Manage(zoneId string, replica int32) error {
 		loopCount++
 		if loopCount >= 10 {
 			fmt.Printf("Failed to watch deployment pod: timeout\n")
+			return fmt.Errorf("failed to watch deployment pod: timeout, retry 10")
 		}
 		time.Sleep(5 * time.Second)
 	}
