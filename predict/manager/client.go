@@ -55,35 +55,36 @@ func Calc(predResponse *timesnet.PredDataResponse, siteId string) (int32, error)
 	for _, pred := range predResponse.Pred {
 		maxPred = math.Max(maxPred, pred)
 	}
-	// 2. 查询当前边缘站点可以容纳多少实例。
-	rows, err := mysql.DB.Query("")
+	// 2.1. 查询当前边缘站点可以容纳多少实例。
+	maxSiteInstances, err := queryMaxSiteInstances(siteId)
 	if err != nil {
-		fmt.Printf("query failed, err:%v\n", err)
-		return 0, err
+		return -1, err
 	}
-	defer func(query *sql.Rows) {
-		err := query.Close()
-		if err != nil {
-			fmt.Printf("close query failed, err:%v\n", err)
-		}
-	}(rows)
-	var (
-		id        int64
-		siteIdDB  string
-		instances int32
-	)
-	if rows.Next() {
-		if err := rows.Scan(&id, &siteIdDB, &instances); err != nil {
-			fmt.Printf("scan failed: %v\n", err)
-			return 0, err
-		}
+	// 2.2. 查询目前有多少实例跑在边缘站点上。
+	siteInstances, err := queryCurrentSiteInstances(siteId, false)
+	if err != nil {
+		return -1, err
 	}
-	// TODO-issue: 申请资源之前，要将 k8s 的 pod 状态和表对应一下
-	// replica 属性直接面向终态。
-	return int32(math.Ceil(maxPred - float64(instances))), nil
+	// 2.3. 查询目前有多少实例跑在中心站点上。
+	centerInstances, err := queryCurrentSiteInstances(siteId, true)
+	if err != nil {
+		return -1, err
+	}
+	unAllocateInstances := int32(maxPred - float64(siteInstances+centerInstances))
+	capacitySiteInstances := maxSiteInstances - siteInstances
+	needCenterInstances := unAllocateInstances - capacitySiteInstances
+	if needCenterInstances <= 0 {
+		return -centerInstances, nil
+	} else {
+		return needCenterInstances - centerInstances, nil
+	}
 }
 
 func Manage(zoneId string, replica int32) error {
+	if replica < 0 {
+		// 如果设置为负数，那么 replica 直接归为零值就好。
+		replica = 0
+	}
 	err := apply(zoneId+"-deploy", zoneId, replica)
 	if err != nil {
 		fmt.Printf("Failed to apply deployment: %v\n", err)
@@ -194,4 +195,34 @@ func podWatch(deploymentName, zoneId string) (*DeploymentPodWatchResponse, error
 		return nil, err
 	}
 	return &responseData, nil
+}
+
+func queryMaxSiteInstances(siteId string) (int32, error) {
+	rows, err := mysql.DB.Query("")
+	if err != nil {
+		fmt.Printf("query max site instances failed, err:%v\n", err)
+		return 0, err
+	}
+	defer func(query *sql.Rows) {
+		err := query.Close()
+		if err != nil {
+			fmt.Printf("close query max site instances failed, err:%v\n", err)
+		}
+	}(rows)
+	var (
+		id        int64
+		siteIdDB  string
+		instances int32
+	)
+	if rows.Next() {
+		if err := rows.Scan(&id, &siteIdDB, &instances); err != nil {
+			fmt.Printf("scan max site instances failed: %v\n", err)
+			return 0, err
+		}
+	}
+	return instances, nil
+}
+
+func queryCurrentSiteInstances(siteId string, isElastic bool) (int32, error) {
+	return -1, nil
 }
