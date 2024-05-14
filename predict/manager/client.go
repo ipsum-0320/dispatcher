@@ -50,6 +50,13 @@ func init() {
 	managerPort = managerConfig.port
 }
 
+func AbsInt(n int32) int32 {
+	if n < 0 {
+		return -n
+	}
+	return n
+}
+
 func Calc(predResponse *timesnet.PredDataResponse, siteId string) (int32, error) {
 	// 1. 拿到预测值中的最大值。
 	maxPred := math.SmallestNonzeroFloat64
@@ -66,18 +73,31 @@ func Calc(predResponse *timesnet.PredDataResponse, siteId string) (int32, error)
 	if err != nil {
 		return -1, err
 	}
-	// 2.3. 查询目前有多少实例跑在中心站点上。
+	// 2.3. 查询目前有多少实例跑在中心站点s上。
 	centerInstances, err := queryCurrentSiteInstances(siteId, true)
 	if err != nil {
 		return -1, err
 	}
+	// 2.4. 计算预计还缺少的资源的实例有多少。
 	unAllocateInstances := int32(maxPred - float64(siteInstances+centerInstances))
+	// 2.5. 计算边缘站点还有多少容量可以利用。
 	capacitySiteInstances := maxSiteInstances - siteInstances
+	// 2.6. 计算需要向中心云站点申请多少资源。
 	needCenterInstances := unAllocateInstances - capacitySiteInstances
 	if needCenterInstances <= 0 {
-		return -centerInstances, nil
+		// 计算剩余的边缘站点容量。
+		leftCapacity := AbsInt(needCenterInstances)
+		// 计算是否还需要中心站点资源，如果需要，还需要多少。
+		newCenter := leftCapacity - centerInstances
+		if newCenter >= 0 {
+			// newCenter >= 0 意味着不需要。
+			return 0, nil
+		}
+		// newCenter < 0 意味着需要。
+		return AbsInt(newCenter), nil
 	} else {
-		return needCenterInstances - centerInstances, nil
+		// 需要原来已有的 + 额外申请的中心站点资源。
+		return needCenterInstances + centerInstances, nil
 	}
 }
 
