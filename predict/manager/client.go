@@ -57,24 +57,24 @@ func AbsInt(n int32) int32 {
 	return n
 }
 
-func Calc(predResponse *timesnet.PredDataResponse, siteId string) (int32, error) {
+func Calc(predResponse *timesnet.PredDataResponse, zoneId string, siteId string) (int32, error) {
 	// 1. 拿到预测值中的最大值。
 	maxPred := math.SmallestNonzeroFloat64
 	for _, pred := range predResponse.Pred {
 		maxPred = math.Max(maxPred, pred)
 	}
 	// 2.1. 查询当前边缘站点可以容纳多少实例。
-	maxSiteInstances, err := queryMaxSiteInstances(siteId)
+	maxSiteInstances, err := queryMaxSiteInstances(zoneId, siteId)
 	if err != nil {
 		return -1, err
 	}
 	// 2.2. 查询目前有多少实例跑在边缘站点上。
-	siteInstances, err := queryCurrentSiteInstances(siteId, false)
+	siteInstances, err := queryCurrentSiteInstances(zoneId, siteId, false)
 	if err != nil {
 		return -1, err
 	}
 	// 2.3. 查询目前有多少实例跑在中心站点s上。
-	centerInstances, err := queryCurrentSiteInstances(siteId, true)
+	centerInstances, err := queryCurrentSiteInstances(zoneId, siteId, true)
 	if err != nil {
 		return -1, err
 	}
@@ -219,7 +219,7 @@ func podWatch(deploymentName, zoneId string) (*DeploymentPodWatchResponse, error
 	return &responseData, nil
 }
 
-func queryMaxSiteInstances(siteId string) (int32, error) {
+func queryMaxSiteInstances(zoneId string, siteId string) (int32, error) {
 	rows, err := mysql.DB.Query("")
 	if err != nil {
 		fmt.Printf("query max site instances failed, err:%v\n", err)
@@ -245,6 +245,6 @@ func queryMaxSiteInstances(siteId string) (int32, error) {
 	return instances, nil
 }
 
-func queryCurrentSiteInstances(siteId string, isElastic bool) (int32, error) {
+func queryCurrentSiteInstances(zoneId string, siteId string, isElastic bool) (int32, error) {
 	return -1, nil
 }
