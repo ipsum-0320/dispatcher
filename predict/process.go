@@ -43,7 +43,7 @@ func Process(zoneId string) error {
 		wg.Add(1)
 		go func(zoneId string, siteId string) {
 			defer wg.Done()
-			queryDateInstanceSQL := fmt.Sprintf("SELECT id, site_id, date, instances FROM record_%s WHERE site_id = %s", zoneId, siteId)
+			queryDateInstanceSQL := fmt.Sprintf("SELECT id, site_id, date, instances FROM record_%s WHERE site_id = '%s'", zoneId, siteId)
 			DateInstanceRows, err := mysql.DB.Query(queryDateInstanceSQL)
 			if err != nil {
 				fmt.Printf("%s-%s, query date instance failed, err:%v\n", zoneId, siteId, err)

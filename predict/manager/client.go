@@ -73,7 +73,7 @@ func Calc(predResponse *timesnet.PredDataResponse, zoneId string, siteId string)
 	if err != nil {
 		return -1, err
 	}
-	// 2.3. 查询目前有多少实例跑在中心站点s上。
+	// 2.3. 查询目前有多少实例跑在中心站点上。
 	centerInstances, err := queryCurrentSiteInstances(zoneId, siteId, true)
 	if err != nil {
 		return -1, err
@@ -220,31 +220,63 @@ func podWatch(deploymentName, zoneId string) (*DeploymentPodWatchResponse, error
 }
 
 func queryMaxSiteInstances(zoneId string, siteId string) (int32, error) {
-	rows, err := mysql.DB.Query("")
+	rows, err := mysql.DB.Query(fmt.Sprintf("SELECT DISTINCT count(*) AS COUNT FROM record_%s WHERE is_elastic = 0 AND site_id = '%s'", zoneId, siteId))
 	if err != nil {
-		fmt.Printf("query max site instances failed, err:%v\n", err)
+		fmt.Printf("%s-%s: query max site instances failed, err:%v\n", zoneId, siteId, err)
 		return 0, err
 	}
 	defer func(query *sql.Rows) {
 		err := query.Close()
 		if err != nil {
-			fmt.Printf("close query max site instances failed, err:%v\n", err)
+			fmt.Printf("%s-%s: close query max site instances failed, err:%v\n", zoneId, siteId, err)
 		}
 	}(rows)
 	var (
-		id        int64
-		siteIdDB  string
-		instances int32
+		count int32
 	)
 	if rows.Next() {
-		if err := rows.Scan(&id, &siteIdDB, &instances); err != nil {
-			fmt.Printf("scan max site instances failed: %v\n", err)
+		if err := rows.Scan(&count); err != nil {
+			fmt.Printf("%s-%s: scan max site instances failed: %v\n", zoneId, siteId, err)
 			return 0, err
 		}
 	}
-	return instances, nil
+	return count, nil
+}
+
+func siteOrCloud(isElastic bool) string {
+	if isElastic {
+		return "cloud"
+	} else {
+		return "site"
+	}
 }
 
 func queryCurrentSiteInstances(zoneId string, siteId string, isElastic bool) (int32, error) {
-	return -1, nil
+	var isElasticInt int32
+	if isElastic {
+		isElasticInt = 1
+	} else {
+		isElasticInt = 0
+	}
+	rows, err := mysql.DB.Query(fmt.Sprintf("SELECT DISTINCT count(*) AS COUNT FROM record_%s WHERE is_elastic = %d AND site_id = '%s' AND status = 'available'", zoneId, isElasticInt, siteId))
+	if err != nil {
+		fmt.Printf("%s-%s: query current %s instances failed, err:%v\n", zoneId, siteId, siteOrCloud(isElastic), err)
+		return 0, err
+	}
+	defer func(query *sql.Rows) {
+		err := query.Close()
+		if err != nil {
+			fmt.Printf("%s-%s: close current %s instances failed, err:%v\n", zoneId, siteId, siteOrCloud(isElastic), err)
+		}
+	}(rows)
+	var (
+		count int32
+	)
+	if rows.Next() {
+		if err := rows.Scan(&count); err != nil {
+			fmt.Printf("%s-%s: scan current %s instances failed, err:%v\n", zoneId, siteId, siteOrCloud(isElastic), err)
+			return 0, err
+		}
+	}
+	return count, nil
 }
