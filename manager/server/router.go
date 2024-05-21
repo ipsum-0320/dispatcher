@@ -7,9 +7,8 @@ import (
 )
 
 var (
-	healthzPath            = "/healthz"
-	deploymentApplyPath    = "/deployment/apply"
-	deploymentPodWatchPath = "/deployment/pod/watch"
+	healthzPath         = "/healthz"
+	deploymentApplyPath = "/deployment/apply"
 )
 
 func NewRouter() *mux.Router {
@@ -25,12 +24,6 @@ func NewRouter() *mux.Router {
 		Path(deploymentApplyPath).
 		Name("deploymentApply").
 		HandlerFunc(apis.DeploymentApply)
-
-	router.
-		Methods(http.MethodGet).
-		Path(deploymentPodWatchPath).
-		Name("deploymentPodWatch").
-		HandlerFunc(apis.DeploymentPodWatch)
 
 	return router
 }

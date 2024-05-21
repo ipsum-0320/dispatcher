@@ -12,6 +12,7 @@ import (
 	"k8s.io/klog/v2"
 	"log"
 	"manager/server"
+	"manager/watcher"
 	"os/signal"
 	"syscall"
 	"time"
@@ -46,6 +47,7 @@ func main() {
 			err = server.Serve(ctx, host, int64(port))
 		}
 		fmt.Printf("server started\n")
+		watcher.PodWatcher()
 	}
 
 	// 创建分布式锁。

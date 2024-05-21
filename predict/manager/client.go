@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"gopkg.in/yaml.v3"
 	"io"
 	"math"
 	"net/http"
@@ -13,9 +14,6 @@ import (
 	"predict/mysql"
 	"predict/timesnet"
 	"runtime"
-	"time"
-
-	"gopkg.in/yaml.v3"
 )
 
 // manager 通过 k8s 部署，因此最好使用 configmap 获取 manager 的相关配置。
@@ -111,24 +109,6 @@ func Manage(zoneId string, replica int32) error {
 		fmt.Printf("Failed to apply deployment: %v\n", err)
 		return err
 	}
-	loopCount := 0
-	for true {
-		watchRes, err := podWatch(zoneId+"-deploy", zoneId)
-		if err != nil {
-			fmt.Printf("Failed to watch deployment pod: %v\n", err)
-			return err
-		}
-		if watchRes.UnReadyNum == 0 {
-			break
-		}
-		fmt.Printf("Deployment pod not ready, readyNum: %d/%d\n", watchRes.ReadyNum, watchRes.ReadyNum+watchRes.UnReadyNum)
-		loopCount++
-		if loopCount >= 10 {
-			fmt.Printf("Failed to watch deployment pod: timeout\n")
-			return fmt.Errorf("failed to watch deployment pod: timeout, retry 10")
-		}
-		time.Sleep(5 * time.Second)
-	}
 	return nil
 }
 
@@ -179,44 +159,6 @@ func apply(deploymentName, zoneId string, replica int32) error {
 type DeploymentPodWatchResponse struct {
 	ReadyNum   int32 `json:"readyNum"`
 	UnReadyNum int32 `json:"unReadyNum"`
-}
-
-func podWatch(deploymentName, zoneId string) (*DeploymentPodWatchResponse, error) {
-	path := "/deployment/pod/watch"
-	url := fmt.Sprintf("%s://%s:%d%s", protocol, managerIP, managerPort, path)
-
-	req, err := http.NewRequest("GET", url, nil)
-	if err != nil {
-		fmt.Printf("Failed to create request: %v\n", err)
-		return nil, err
-	}
-
-	params := req.URL.Query()
-	params.Add("deploymentName", deploymentName)
-	params.Add("zoneId", zoneId)
-	req.URL.RawQuery = params.Encode()
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, _ := http.DefaultClient.Do(req)
-	defer func(Body io.ReadCloser) {
-		err := Body.Close()
-		if err != nil {
-			fmt.Printf("Failed to close response body: %v\n", err)
-		}
-	}(resp.Body)
-
-	if resp.StatusCode != http.StatusOK {
-		fmt.Printf("Failed to watch deployment pod: %v\n", resp.Status)
-		return nil, fmt.Errorf("failed to watch deployment pod: %v", resp.Status)
-	}
-
-	var responseData DeploymentPodWatchResponse
-	decoder := json.NewDecoder(resp.Body)
-	if err := decoder.Decode(&responseData); err != nil {
-		fmt.Println("Error decoding JSON:", err)
-		return nil, err
-	}
-	return &responseData, nil
 }
 
 func queryMaxSiteInstances(zoneId string, siteId string) (int32, error) {
