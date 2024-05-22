@@ -4,24 +4,24 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
+	"manager/server"
+	"os/signal"
+	"syscall"
+	"time"
+
 	"k8s.io/apimachinery/pkg/util/uuid"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/leaderelection"
 	"k8s.io/client-go/tools/leaderelection/resourcelock"
 	"k8s.io/klog/v2"
-	"log"
-	"manager/server"
-	"manager/watcher"
-	"os/signal"
-	"syscall"
-	"time"
 )
 
 var (
-	ns   = "default"
+	ns   = "cloudgame"
 	host = "0.0.0.0"
-	port = 8080
+	port = 6666
 )
 
 func main() {
@@ -47,7 +47,6 @@ func main() {
 			err = server.Serve(ctx, host, int64(port))
 		}
 		fmt.Printf("server started\n")
-		watcher.PodWatcher()
 	}
 
 	// 创建分布式锁。

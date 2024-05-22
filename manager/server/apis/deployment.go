@@ -4,74 +4,122 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"k8s.io/apimachinery/pkg/types"
 	k8s_client "manager/k8s-client"
 	"net/http"
+	"sync"
+	"time"
 
-	appsv1 "k8s.io/api/apps/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/resource"
+	"k8s.io/apimachinery/pkg/util/intstr"
+	"k8s.io/apimachinery/pkg/util/uuid"
+
+	mysql_service "manager/mysql/service"
+
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 var (
-	namespace = "default"
+	namespace = "cloudgame"
 )
 
-func deploymentFactory(
-	name string,
+func podFactory(
+	podName string,
 	zoneId string,
-) *appsv1.Deployment {
-	defaultDeploymentReplicas := int32(0)
-
-	defaultDeployment := &appsv1.Deployment{
+) *corev1.Pod {
+	return &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: name,
+			Name:      podName,
+			Namespace: namespace,
 			Labels: map[string]string{
-				"Zone_id": zoneId,
+				"instance": podName,
 			},
 		},
-		Spec: appsv1.DeploymentSpec{
-			Replicas: &defaultDeploymentReplicas,
-			Selector: &metav1.LabelSelector{
-				MatchLabels: map[string]string{
-					"Zone_id": zoneId,
-				},
-			},
-			Template: corev1.PodTemplateSpec{
-				ObjectMeta: metav1.ObjectMeta{
-					Labels: map[string]string{
-						"Zone_id": zoneId,
+		Spec: corev1.PodSpec{
+			Containers: []corev1.Container{
+				{
+					Name:  "cloudgame-container",
+					Image: "cloudgame:v1",
+					Ports: []corev1.ContainerPort{
+						{
+							Name:          "http",
+							ContainerPort: 8080,
+							Protocol:      corev1.ProtocolTCP,
+						},
+					},
+					Resources: corev1.ResourceRequirements{
+						Limits: corev1.ResourceList{
+							corev1.ResourceCPU:    resource.MustParse("20m"),
+							corev1.ResourceMemory: resource.MustParse("100Mi"),
+						},
+						Requests: corev1.ResourceList{
+							corev1.ResourceCPU:    resource.MustParse("10m"),
+							corev1.ResourceMemory: resource.MustParse("50Mi"),
+						},
 					},
 				},
-				Spec: corev1.PodSpec{
-					Containers: []corev1.Container{
-						{
-							Name:  "huawei-game-instance",
-							Image: "nginx",
-							Ports: []corev1.ContainerPort{
-								{
-									Name:          "http",
-									ContainerPort: 80,
+			},
+			Affinity: &corev1.Affinity{
+				NodeAffinity: &corev1.NodeAffinity{
+					RequiredDuringSchedulingIgnoredDuringExecution: &corev1.NodeSelector{
+						NodeSelectorTerms: []corev1.NodeSelectorTerm{
+							{
+								MatchExpressions: []corev1.NodeSelectorRequirement{
+									{
+										Key:      "zone_id",
+										Operator: corev1.NodeSelectorOpIn,
+										Values:   []string{zoneId},
+									},
+									{
+										Key:      "role",
+										Operator: corev1.NodeSelectorOpIn,
+										Values:   []string{"center"},
+									},
 								},
 							},
 						},
 					},
 				},
 			},
+			RestartPolicy: corev1.RestartPolicyAlways,
 		},
 	}
-	return defaultDeployment
 }
 
-type DeploymentApplyRequest struct {
-	DeploymentName string `json:"deploymentName"`
-	ZoneId         string `json:"zoneId"`
-	Replica        int32  `json:"replica"`
+func serviceFactory(
+	serviceName string,
+	podName string,
+) *corev1.Service {
+	return &corev1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      serviceName,
+			Namespace: namespace,
+		},
+		Spec: corev1.ServiceSpec{
+			Selector: map[string]string{
+				"instance": podName,
+			},
+			Type: corev1.ServiceTypeNodePort,
+			Ports: []corev1.ServicePort{
+				{
+					Name:       "http",
+					Port:       80,
+					TargetPort: intstr.IntOrString{IntVal: 8080},
+					Protocol:   corev1.ProtocolTCP,
+				},
+			},
+		},
+	}
 }
 
-func DeploymentApply(w http.ResponseWriter, r *http.Request) {
-	// 基于 deployment 的 replica 机制。
-	reqBody := DeploymentApplyRequest{}
+type InstanceRequest struct {
+	ZoneId string `json:"zone_id"`
+	Number int32  `json:"number"`
+}
+
+func InstanceApply(w http.ResponseWriter, r *http.Request) {
+	reqBody := InstanceRequest{}
 	err := json.NewDecoder(r.Body).Decode(&reqBody)
 	if err != nil {
 		fmt.Printf("Failed to decode request: %v\n", err)
@@ -83,50 +131,146 @@ func DeploymentApply(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	deploymentName := reqBody.DeploymentName
-	dp, err := k8s_client.Client.AppsV1().Deployments(namespace).Get(context.TODO(), deploymentName, metav1.GetOptions{})
-	if err != nil {
-		fmt.Printf("Failed to get deployment: %v\n", err)
+	var (
+		wg    sync.WaitGroup
+		mu    sync.Mutex
+		count = 0
+	)
+	for i := 1; i <= int(reqBody.Number); i++ {
+
+		wg.Add(1)
+		go func(zoneId string) {
+			defer wg.Done()
+
+			randomId := uuid.NewUUID()
+			podName := fmt.Sprintf("cloudgame-center-%s", randomId)
+			serviceName := fmt.Sprintf("service-%s", podName)
+			instanceId := fmt.Sprintf("instance-%s", podName)
+
+			// 部署Pod和Service
+			pod := podFactory(podName, zoneId)
+			if _, err := k8s_client.Client.CoreV1().Pods(namespace).Create(context.TODO(), pod, metav1.CreateOptions{}); err != nil {
+				fmt.Printf("Failed to create pod: %v\n", err)
+				return
+			}
+			service := serviceFactory(serviceName, podName)
+			if _, err := k8s_client.Client.CoreV1().Services(namespace).Create(context.TODO(), service, metav1.CreateOptions{}); err != nil {
+				fmt.Printf("Failed to create service: %v\n", err)
+				return
+			}
+
+			// 等待Pod和Service部署完成
+			time.Sleep(1 * time.Second)
+			if pod, err = k8s_client.Client.CoreV1().Pods(namespace).Get(context.Background(), podName, metav1.GetOptions{}); err != nil {
+				fmt.Printf("Failed to get pod: %v\n", err)
+				return
+			}
+			if service, err = k8s_client.Client.CoreV1().Services(namespace).Get(context.Background(), serviceName, metav1.GetOptions{}); err != nil {
+				fmt.Printf("Failed to get service: %v\n", err)
+				return
+			}
+
+			for _, port := range service.Spec.Ports {
+				if port.NodePort != 0 {
+					err := mysql_service.InsertInstance(zoneId, "null", pod.Status.HostIP, instanceId, podName, int(port.NodePort), 1, "available", "null")
+					if err != nil {
+						fmt.Printf("Failed to insert instance into database: %v\n", err)
+						return
+					}
+
+					mu.Lock()
+					count++
+					mu.Unlock()
+					break
+				}
+			}
+
+		}(reqBody.ZoneId)
+	}
+
+	wg.Wait()
+
+	if count == int(reqBody.Number) {
+		SendHttpResponse(w, &Response{
+			StatusCode: 200,
+			Message:    "OK",
+			Data:       "All instances applied successfully",
+		}, http.StatusOK)
+	} else {
 		SendErrorResponse(w, &ErrorCodeWithMessage{
 			HttpStatus: http.StatusInternalServerError,
 			ErrorCode:  500,
 			Message:    "Internal server error",
+		}, "There was something wrong when applying some instances")
+	}
+}
+
+func InstanceRelease(w http.ResponseWriter, r *http.Request) {
+	reqBody := InstanceRequest{}
+	err := json.NewDecoder(r.Body).Decode(&reqBody)
+	if err != nil {
+		fmt.Printf("Failed to decode request: %v\n", err)
+		SendErrorResponse(w, &ErrorCodeWithMessage{
+			HttpStatus: http.StatusBadRequest,
+			ErrorCode:  400,
+			Message:    "Bad request",
 		}, err.Error())
 		return
 	}
-	if dp == nil {
-		// 不存在，创建 deployment。
-		deployment := deploymentFactory(deploymentName, reqBody.ZoneId)
-		_, err = k8s_client.Client.AppsV1().Deployments(namespace).Create(context.TODO(), deployment, metav1.CreateOptions{})
-		if err != nil {
-			fmt.Printf("Failed to create deployment: %v\n", err)
-			SendErrorResponse(w, &ErrorCodeWithMessage{
-				HttpStatus: http.StatusInternalServerError,
-				ErrorCode:  500,
-				Message:    "Internal server error",
-			}, err.Error())
-			return
+
+	podList, err := mysql_service.GetAndDeleteAvailableInstancesInCenter(reqBody.ZoneId, reqBody.Number)
+	if err != nil {
+		fmt.Printf("Failed to get and delete instances in %s center\n", reqBody.ZoneId)
+		SendErrorResponse(w, &ErrorCodeWithMessage{
+			HttpStatus: http.StatusInternalServerError,
+			ErrorCode:  500,
+			Message:    "Internal server error",
+		}, "There was something wrong when get available instances from database")
+		return
+	} else if podList == nil {
+		fmt.Printf("There is no elastic instance in %s center\n", reqBody.ZoneId)
+		SendErrorResponse(w, &ErrorCodeWithMessage{
+			HttpStatus: http.StatusInternalServerError,
+			ErrorCode:  500,
+			Message:    "Internal server error",
+		}, "There is no elastic instance in this zone")
+		return
+	}
+
+	ok := true
+	for _, podName := range podList {
+		if err := k8s_client.Client.CoreV1().Pods(namespace).Delete(context.TODO(), podName, metav1.DeleteOptions{}); err != nil {
+			if errors.IsNotFound(err) {
+				fmt.Printf("Pod %s not found in namespace %s\n", podName, namespace)
+			} else {
+				fmt.Printf("Failed to delete pod %s in namesapce %s: %v\n", podName, namespace, err)
+			}
+			ok = false
 		}
+
+		serviceName := fmt.Sprintf("service-%s", podName)
+		if err := k8s_client.Client.CoreV1().Services(namespace).Delete(context.TODO(), serviceName, metav1.DeleteOptions{}); err != nil {
+			if errors.IsNotFound(err) {
+				fmt.Printf("Service %s not found in namespace %s\n", serviceName, namespace)
+			} else {
+				fmt.Printf("Failed to delete service %s in namesapce %s: %v\n", serviceName, namespace, err)
+			}
+			ok = false
+		}
+		fmt.Printf("Pod %s and Service %s delete successfully from namespace %s\n", podName, serviceName, namespace)
 	}
 
-	// 更新 deployment 的 replica。
-	patchReplicas := []byte(fmt.Sprintf(`{"spec":{"replicas":%d}}`, reqBody.Replica))
-	_, err = k8s_client.Client.AppsV1().Deployments(namespace).Patch(context.TODO(), deploymentName, types.MergePatchType,
-		patchReplicas, metav1.PatchOptions{})
-	if err != nil {
-		fmt.Printf("Failed to patch deployment: %v\n", err)
+	if ok {
+		SendHttpResponse(w, &Response{
+			StatusCode: 200,
+			Message:    "OK",
+			Data:       "All instances release successfully",
+		}, http.StatusOK)
+	} else {
 		SendErrorResponse(w, &ErrorCodeWithMessage{
 			HttpStatus: http.StatusInternalServerError,
 			ErrorCode:  500,
 			Message:    "Internal server error",
-		}, err.Error())
-		return
+		}, "There was something wrong when releasing some instances")
 	}
-
-	// 返回成功结果。
-	SendHttpResponse(w, &Response{
-		StatusCode: 200,
-		Message:    "OK",
-		Data:       "Deployment applied successfully",
-	}, http.StatusOK)
 }

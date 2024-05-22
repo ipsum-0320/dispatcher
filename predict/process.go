@@ -1,45 +1,21 @@
 package main
 
 import (
-	"database/sql"
 	"fmt"
 	"predict/manager"
 	"predict/mysql"
 	"predict/timesnet"
 	"sync"
+
+	mysql_service "predict/mysql/service"
 )
 
-func Process(zoneId string) error {
-	querySiteIdSQL := fmt.Sprintf("SELECT DISTINCT site_id FROM record_%s", zoneId)
-	siteIdRows, err := mysql.DB.Query(querySiteIdSQL)
-	if err != nil {
-		fmt.Printf("%s: query siteId failed, err:%v\n", zoneId, err)
-		return err
-	}
-	defer func(query *sql.Rows) {
-		err := query.Close()
-		if err != nil {
-			fmt.Printf("%s: close query siteId failed, err:%v\n", zoneId, err)
-		}
-	}(siteIdRows)
-	siteIds := make([]string, 0)
-	for siteIdRows.Next() {
-		var siteId string
-		if err := siteIdRows.Scan(&siteId); err != nil {
-			fmt.Printf("%s: scan siteId failed: %v\n", zoneId, err)
-			return err
-		}
-		siteIds = append(siteIds, siteId)
-	}
-	if err := siteIdRows.Err(); err != nil {
-		fmt.Printf("%s, error during siteId iteration: %v\n", zoneId, err)
-		return err
-	}
+func Process(zoneId string, siteList []string) error {
+	zoneApply := int32(0)
 
-	replica := int32(0)
 	var wg sync.WaitGroup
 	var mu sync.Mutex
-	for _, siteId := range siteIds {
+	for _, siteId := range siteList {
 		wg.Add(1)
 		go func(zoneId string, siteId string) {
 			defer wg.Done()
@@ -78,17 +54,27 @@ func Process(zoneId string) error {
 				fmt.Printf("%s-%s: predict failed, err:%v\n", zoneId, siteId, err)
 				panic(fmt.Sprintf("%s-%s: predict failed, err:%v\n", zoneId, siteId, err))
 			}
-			calc, err := manager.Calc(predResponse, zoneId, siteId)
+			siteApply, err := manager.CalculateApplyNumberForSite(predResponse, zoneId, siteId)
 			if err != nil {
 				fmt.Printf("%s-%s: calc failed, err:%v\n", zoneId, siteId, err)
 				panic(fmt.Sprintf("%s-%s: calc failed, err:%v\n", zoneId, siteId, err))
 			}
 			mu.Lock()
-			replica += calc
+			zoneApply += siteApply
 			mu.Unlock()
 		}(zoneId, siteId)
 	}
 	wg.Wait()
-	err = manager.Manage(zoneId, replica)
+
+	centerAvailable, err := mysql_service.GetAvailableInstanceInCenter(zoneId)
+	if err != nil {
+		fmt.Printf("Failed to get available instances in %s center: %v\n", zoneId, err)
+		return err
+	}
+
+	if err = manager.Manage(zoneId, zoneApply-centerAvailable); err != nil {
+		fmt.Printf("Failed to apply or release instances in %s center: %v\n", zoneId, err)
+		return err
+	}
 	return nil
 }

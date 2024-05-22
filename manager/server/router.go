@@ -1,14 +1,16 @@
 package server
 
 import (
-	"github.com/gorilla/mux"
 	"manager/server/apis"
 	"net/http"
+
+	"github.com/gorilla/mux"
 )
 
 var (
-	healthzPath         = "/healthz"
-	deploymentApplyPath = "/deployment/apply"
+	healthzPath     = "/healthz"
+	instanceApply   = "/instance/apply"
+	instanceRelease = "/instance/release"
 )
 
 func NewRouter() *mux.Router {
@@ -21,9 +23,14 @@ func NewRouter() *mux.Router {
 
 	router.
 		Methods(http.MethodPost).
-		Path(deploymentApplyPath).
-		Name("deploymentApply").
-		HandlerFunc(apis.DeploymentApply)
+		Path(instanceApply).
+		Name("instanceApply").
+		HandlerFunc(apis.InstanceApply)
+	router.
+		Methods(http.MethodPost).
+		Path(instanceRelease).
+		Name("instanceRelease").
+		HandlerFunc(apis.InstanceRelease)
 
 	return router
 }

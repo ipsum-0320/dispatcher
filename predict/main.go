@@ -3,13 +3,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"k8s.io/apimachinery/pkg/util/uuid"
-	"k8s.io/apimachinery/pkg/util/wait"
-	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/rest"
-	"k8s.io/client-go/tools/leaderelection"
-	"k8s.io/client-go/tools/leaderelection/resourcelock"
-	"k8s.io/klog/v2"
 	"log"
 	"net/http"
 	"os/signal"
@@ -17,14 +10,22 @@ import (
 	_ "predict/mysql"
 	"syscall"
 	"time"
+
+	"k8s.io/apimachinery/pkg/util/uuid"
+	"k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/leaderelection"
+	"k8s.io/client-go/tools/leaderelection/resourcelock"
+	"k8s.io/klog/v2"
+
+	mysql_service "predict/mysql/service"
 )
 
 var (
-	ns   = "default"
+	ns   = "cloudgame"
 	host = "0.0.0.0"
-	port = 8080
-	// 由于分库分表的设计，zoneId 以表为单位单独列出，zoneId 的列表需要写死。
-	zoneIds = []string{"huadong", "xibei"}
+	port = 7777
 )
 
 func main() {
@@ -42,6 +43,11 @@ func main() {
 
 	id := string(uuid.NewUUID())
 
+	zoneList, err := mysql_service.GetZoneListInDB()
+	if err != nil {
+		log.Fatalf("Error getting zoneList in database: %v", err)
+	}
+
 	run := func(ctx context.Context) {
 		// 确立心跳检测服务。
 		http.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
@@ -53,16 +59,17 @@ func main() {
 		if err := http.ListenAndServe(fmt.Sprintf("%s:%d", host, port), nil); err != nil {
 			fmt.Println("server serve failed:", err)
 		}
+
 		// 创建一个定时任务，每隔 15 分钟执行一次。
 		wait.Until(func() {
-			for _, zoneId := range zoneIds {
-				go func(zoneId string) {
-					err := Process(zoneId)
+			for zoneId, siteList := range zoneList {
+				go func(zoneId string, siteList []string) {
+					err := Process(zoneId, siteList)
 					if err != nil {
 						fmt.Printf("%s process failed, err:%v\n", zoneId, err)
 						return
 					}
-				}(zoneId)
+				}(zoneId, siteList)
 			}
 		}, 15*time.Minute, ctx.Done())
 	}
