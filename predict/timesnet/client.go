@@ -10,18 +10,15 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"predict/config"
 	"runtime"
 	"strconv"
 	"time"
 )
 
-// python server 不在 k8s 部署，因此可以硬编码配置。
 var (
-	protocol = "http"
-	host     = "localhost"
-	port     = 5000
-	path     = "/predict"
-	client   = &http.Client{
+	path   = "/predict"
+	client = &http.Client{
 		Timeout: 20 * time.Second, // 设置超时时间为10秒
 	}
 )
@@ -35,7 +32,7 @@ type PredDataResponse struct {
 	Pred   []float64
 }
 
-func Predict(source PredDataSource, siteId string) (*PredDataResponse, error) {
+func Predict(source PredDataSource, zoneId string, siteId string) (*PredDataResponse, error) {
 	csvPath, err := source2csv(source)
 	if err != nil {
 		fmt.Println("Error converting source to CSV:", err)
@@ -73,7 +70,7 @@ func Predict(source PredDataSource, siteId string) (*PredDataResponse, error) {
 		return nil, err
 	}
 
-	url := fmt.Sprintf("%s://%s:%d%s/%s", protocol, host, port, path, siteId)
+	url := fmt.Sprintf("%s://%s:%s%s/%s/%s", config.TIMESNETPROTOCOL, config.TIMESNETHOST, config.TIMESNETPORT, path, zoneId, siteId)
 	// 对于每个边缘站点的预测，都会有一个对应的请求路径，siteId 用作区分。
 	req, err := http.NewRequest("POST", url, &reqBody)
 	if err != nil {
@@ -106,6 +103,14 @@ func source2csv(source PredDataSource) (string, error) {
 	_, filename, _, _ := runtime.Caller(0)
 	curDir := filepath.Dir(filename)
 	csvPath := filepath.Join(curDir, "source.csv")
+
+	// 确保包含文件的目录存在
+	dir := filepath.Dir(csvPath)
+	err := os.MkdirAll(dir, 0755) // 创建所有必需的父目录，并设置权限
+	if err != nil {
+		fmt.Println("Error creating directory:", err)
+		return "", err
+	}
 	file, err := os.OpenFile(csvPath, os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
 		fmt.Println("Error opening file:", err)

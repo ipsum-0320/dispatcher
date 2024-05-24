@@ -1,28 +1,38 @@
 package k8s_client
 
 import (
-	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/tools/clientcmd"
 	"log"
-	"path/filepath"
-	"runtime"
+	"manager/config"
+
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/clientcmd"
 )
 
-var Client *kubernetes.Clientset
+var TargetClient *kubernetes.Clientset
+var LocalClient *kubernetes.Clientset
 
 func init() {
-	_, filename, _, _ := runtime.Caller(0)
-	curDir := filepath.Dir(filename)
-	configPath := filepath.Join(curDir, "..", "conf", "config")
-	config, err := clientcmd.BuildConfigFromFlags("", configPath)
+
+	// 从业务集群中获取 config，并创建客户端。
+	c, err := rest.InClusterConfig()
 	if err != nil {
-		panic(err)
+		log.Fatalf("Error creating local Kubernetes config: %v", err)
+	}
+	LocalClient, err = kubernetes.NewForConfig(c)
+	if err != nil {
+		log.Fatalf("Error connecting local Kubernetes client: %v", err)
 	}
 
-	clientset, err := kubernetes.NewForConfig(config)
+	// 从环境变量获取目标集群config，并创建客户端
+	c, err = clientcmd.BuildConfigFromFlags("", config.K8SCONFIGPATH)
 	if err != nil {
-		log.Println("connect failed")
+		log.Fatalf("Error creating target Kubernetes config: %v", err)
 	}
 
-	Client = clientset
+	TargetClient, err = kubernetes.NewForConfig(c)
+	if err != nil {
+		log.Fatalf("Error connecting target Kubernetes config: %v", err)
+	}
+
 }

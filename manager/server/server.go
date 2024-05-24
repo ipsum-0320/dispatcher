@@ -4,13 +4,12 @@ import (
 	"context"
 	"fmt"
 	"net/http"
-	"strconv"
 )
 
-func Serve(ctx context.Context, host string, port int64) error {
+func Serve(ctx context.Context, host string, port string) error {
 	router := NewRouter()
 	httpServer := &http.Server{
-		Addr:    host + ":" + strconv.FormatInt(port, 10),
+		Addr:    fmt.Sprintf("%s:%s", host, port),
 		Handler: router,
 	}
 	err := httpServer.ListenAndServe()

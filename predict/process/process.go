@@ -1,4 +1,4 @@
-package main
+package process
 
 import (
 	"fmt"
@@ -49,7 +49,7 @@ func Process(zoneId string, siteList []string) error {
 				panic(fmt.Sprintf("%s-%s: close query date instance failed, err:%v\n", zoneId, siteId, err))
 			}
 
-			predResponse, err := timesnet.Predict(predMap, siteId)
+			predResponse, err := timesnet.Predict(predMap, zoneId, siteId)
 			if err != nil {
 				fmt.Printf("%s-%s: predict failed, err:%v\n", zoneId, siteId, err)
 				panic(fmt.Sprintf("%s-%s: predict failed, err:%v\n", zoneId, siteId, err))
