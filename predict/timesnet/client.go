@@ -34,7 +34,7 @@ type PredDataResponse struct {
 }
 
 func Predict(source PredDataSource, zoneId string, siteId string) (*PredDataResponse, error) {
-	csvPath, err := source2csv(source)
+	csvPath, err := source2csv(source, zoneId, siteId)
 	if err != nil {
 		fmt.Println("Error converting source to CSV:", err)
 		return nil, err
@@ -100,10 +100,10 @@ func Predict(source PredDataSource, zoneId string, siteId string) (*PredDataResp
 	return &responseData, nil
 }
 
-func source2csv(source PredDataSource) (string, error) {
+func source2csv(source PredDataSource, zoneId, siteId string) (string, error) {
 	_, filename, _, _ := runtime.Caller(0)
 	curDir := filepath.Dir(filename)
-	csvPath := filepath.Join(curDir, "source.csv")
+	csvPath := filepath.Join(curDir, fmt.Sprintf("%s-%s-source.csv", zoneId, siteId))
 
 	// 确保包含文件的目录存在
 	dir := filepath.Dir(csvPath)
