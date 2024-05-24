@@ -48,6 +48,10 @@ func Process(zoneId string, siteList []string) error {
 				fmt.Printf("%s-%s: close query date instance failed, err:%v\n", zoneId, siteId, err)
 				panic(fmt.Sprintf("%s-%s: close query date instance failed, err:%v\n", zoneId, siteId, err))
 			}
+			if len(predMap) != 180 {
+				fmt.Printf("%s-%s: date instance length is not 180\n", zoneId, siteId)
+				panic(fmt.Sprintf("%s-%s: date instance length is not 180\n", zoneId, siteId))
+			}
 
 			predResponse, err := timesnet.Predict(predMap, zoneId, siteId)
 			if err != nil {

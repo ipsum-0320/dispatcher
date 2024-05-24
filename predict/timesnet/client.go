@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"predict/config"
 	"runtime"
+	"sort"
 	"strconv"
 	"time"
 )
@@ -130,8 +131,14 @@ func source2csv(source PredDataSource) (string, error) {
 		return "", err
 	}
 
-	for date, value := range source {
-		valueStr := strconv.Itoa(int(value))
+	var sourceKeys []string
+	for key := range source {
+		sourceKeys = append(sourceKeys, key)
+	}
+	sort.Strings(sourceKeys)
+
+	for _, date := range sourceKeys {
+		valueStr := strconv.Itoa(int(source[date]))
 		err := writer.Write([]string{date, valueStr})
 		if err != nil {
 			fmt.Println("Error writing CSV:", err)
