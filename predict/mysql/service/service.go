@@ -80,7 +80,7 @@ func GetAvailableInstanceInCenter(zoneId string) (int32, error) {
 }
 
 func QueryMaxSiteInstances(zoneId string, siteId string) (int32, error) {
-	rows, err := mysql.DB.Query(fmt.Sprintf("SELECT DISTINCT count(*) AS COUNT FROM record_%s WHERE is_elastic = 0 AND site_id = '%s'", zoneId, siteId))
+	rows, err := mysql.DB.Query(fmt.Sprintf("SELECT DISTINCT count(*) AS COUNT FROM instance_%s WHERE is_elastic = 0 AND site_id = '%s'", zoneId, siteId))
 	if err != nil {
 		fmt.Printf("%s-%s: query max site instances failed, err:%v\n", zoneId, siteId, err)
 		return 0, err
@@ -110,7 +110,7 @@ func QueryCurrentSiteInstances(zoneId string, siteId string, isElastic bool) (in
 	} else {
 		isElasticInt = 0
 	}
-	rows, err := mysql.DB.Query(fmt.Sprintf("SELECT DISTINCT count(*) AS COUNT FROM record_%s WHERE is_elastic = %d AND site_id = '%s' AND status = 'available'", zoneId, isElasticInt, siteId))
+	rows, err := mysql.DB.Query(fmt.Sprintf("SELECT DISTINCT count(*) AS COUNT FROM instance_%s WHERE is_elastic = %d AND site_id = '%s' AND status = 'available'", zoneId, isElasticInt, siteId))
 	if err != nil {
 		fmt.Printf("%s-%s: query current %s instances failed, err:%v\n", zoneId, siteId, siteOrCloud(isElastic), err)
 		return 0, err
