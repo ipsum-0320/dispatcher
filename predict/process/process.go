@@ -50,7 +50,7 @@ func Process(zoneId string, siteList []string) error {
 			}
 			if len(predMap) != 180 {
 				fmt.Printf("%s-%s: date instance length is not 180\n", zoneId, siteId)
-				panic(fmt.Sprintf("%s-%s: date instance length is not 180\n", zoneId, siteId))
+				return
 			}
 
 			predResponse, err := timesnet.Predict(predMap, zoneId, siteId)
