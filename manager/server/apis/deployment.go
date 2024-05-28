@@ -213,12 +213,14 @@ func InstanceApply(w http.ResponseWriter, r *http.Request) {
 			Message:    "OK",
 			Data:       "All instances applied successfully",
 		}, http.StatusOK)
+		fmt.Printf("%d instances applied successfully", count)
 	} else {
 		SendErrorResponse(w, &ErrorCodeWithMessage{
 			HttpStatus: http.StatusInternalServerError,
 			ErrorCode:  500,
 			Message:    "Internal server error",
 		}, "There was something wrong when applying some instances")
+		fmt.Printf("There is something wrong: %d instances failed to apply", int(reqBody.Number)-count)
 	}
 }
 
@@ -247,40 +249,55 @@ func InstanceRelease(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ok = true
+	var (
+		wg    sync.WaitGroup
+		mu    sync.Mutex
+		count = 0
+	)
 	for _, podName := range podList {
-		if err := k8s_client.TargetClient.CoreV1().Pods(config.K8SNAMSPACE).Delete(context.TODO(), podName, metav1.DeleteOptions{}); err != nil {
-			if errors.IsNotFound(err) {
-				fmt.Printf("Pod %s not found in namespace %s\n", podName, config.K8SNAMSPACE)
-			} else {
-				fmt.Printf("Failed to delete pod %s in namesapce %s: %v\n", podName, config.K8SNAMSPACE, err)
-			}
-			ok = false
-		}
+		wg.Add(1)
+		go func(podName string) {
+			defer wg.Done()
 
-		serviceName := fmt.Sprintf("service-%s", podName)
-		if err := k8s_client.TargetClient.CoreV1().Services(config.K8SNAMSPACE).Delete(context.TODO(), serviceName, metav1.DeleteOptions{}); err != nil {
-			if errors.IsNotFound(err) {
-				fmt.Printf("Service %s not found in namespace %s\n", serviceName, config.K8SNAMSPACE)
-			} else {
-				fmt.Printf("Failed to delete service %s in namesapce %s: %v\n", serviceName, config.K8SNAMSPACE, err)
+			if err := k8s_client.TargetClient.CoreV1().Pods(config.K8SNAMSPACE).Delete(context.TODO(), podName, metav1.DeleteOptions{}); err != nil {
+				if errors.IsNotFound(err) {
+					fmt.Printf("Pod %s not found in namespace %s\n", podName, config.K8SNAMSPACE)
+				} else {
+					fmt.Printf("Failed to delete pod %s in namesapce %s: %v\n", podName, config.K8SNAMSPACE, err)
+				}
+				return
 			}
-			ok = false
-		}
-		fmt.Printf("Pod %s and Service %s delete successfully from namespace %s\n", podName, serviceName, config.K8SNAMSPACE)
+
+			serviceName := fmt.Sprintf("service-%s", podName)
+			if err := k8s_client.TargetClient.CoreV1().Services(config.K8SNAMSPACE).Delete(context.TODO(), serviceName, metav1.DeleteOptions{}); err != nil {
+				if errors.IsNotFound(err) {
+					fmt.Printf("Service %s not found in namespace %s\n", serviceName, config.K8SNAMSPACE)
+				} else {
+					fmt.Printf("Failed to delete service %s in namesapce %s: %v\n", serviceName, config.K8SNAMSPACE, err)
+				}
+				return
+			}
+			mu.Lock()
+			count++
+			mu.Unlock()
+		}(podName)
 	}
 
-	if ok {
+	wg.Wait()
+
+	if count == int(reqBody.Number) {
 		SendHttpResponse(w, &Response{
 			StatusCode: 200,
 			Message:    "OK",
 			Data:       "All instances release successfully",
 		}, http.StatusOK)
+		fmt.Printf("%d instances released successfully", count)
 	} else {
 		SendErrorResponse(w, &ErrorCodeWithMessage{
 			HttpStatus: http.StatusInternalServerError,
 			ErrorCode:  500,
 			Message:    "Internal server error",
 		}, "There was something wrong when releasing some instances")
+		fmt.Printf("There is something wrong: %d instances failed to release", int(reqBody.Number)-count)
 	}
 }

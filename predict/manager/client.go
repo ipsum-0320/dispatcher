@@ -53,16 +53,17 @@ func CalculateApplyNumberForSite(predResponse *timesnet.PredDataResponse, zoneId
 }
 
 func Manage(zoneId string, replica int32) error {
+	var path string
 	if replica == 0 {
 		fmt.Printf("Replica is 0, no need to apply or release instances\n")
 		return nil
-	}
-	var path string
-	if replica >= 0 {
+	} else if replica > 0 {
 		path = "/instance/apply"
+		fmt.Printf("%d instances need to be applied", replica)
 	} else {
 		path = "/instance/release"
 		replica = -replica
+		fmt.Printf("%d instances need to be released", replica)
 	}
 
 	url := fmt.Sprintf("%s://%s:%s%s", config.MANAGERPROTOCOL, config.MANAGERHOST, config.MANAGERPORT, path)

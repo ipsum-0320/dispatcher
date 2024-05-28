@@ -151,6 +151,5 @@ func source2csv(source PredDataSource, zoneId, siteId string) (string, error) {
 		fmt.Println("Error writing CSV:", err)
 		return "", err
 	}
-	fmt.Println("CSV file overwritten successfully.")
 	return csvPath, nil
 }
