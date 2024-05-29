@@ -59,11 +59,11 @@ func Manage(zoneId string, replica int32) error {
 		return nil
 	} else if replica > 0 {
 		path = "/instance/apply"
-		fmt.Printf("%d instances need to be applied", replica)
+		fmt.Printf("%d instances need to be applied\n", replica)
 	} else {
 		path = "/instance/release"
 		replica = -replica
-		fmt.Printf("%d instances need to be released", replica)
+		fmt.Printf("%d instances need to be released\n", replica)
 	}
 
 	url := fmt.Sprintf("%s://%s:%s%s", config.MANAGERPROTOCOL, config.MANAGERHOST, config.MANAGERPORT, path)
