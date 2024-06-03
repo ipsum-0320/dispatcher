@@ -3,6 +3,7 @@ package config
 import (
 	"log"
 	"os"
+	"strconv"
 )
 
 var (
@@ -23,6 +24,8 @@ var (
 	TIMESNETPROTOCOL = "http" // 算法服务协议
 	TIMESNETHOST     string   // 算法服务地址
 	TIMESNETPORT     string   // 算法服务端口
+
+	ACCELERATIONRATIO int // 加速比例
 )
 
 func init() {
@@ -79,5 +82,13 @@ func init() {
 	TIMESNETPORT = os.Getenv("TIMESNET_PORT")
 	if TIMESNETPORT == "" {
 		log.Fatalf("Failed to get timesnet port from env")
+	}
+
+	var err error
+	ACCELERATIONRATIO, err = strconv.Atoi(os.Getenv("ACCELERATION_RATIO"))
+	if err != nil {
+		log.Fatal("Failed to get acceleration ratio from env")
+	} else if ACCELERATIONRATIO == 0 {
+		log.Fatal("Acceleration ratio cannot be zero")
 	}
 }

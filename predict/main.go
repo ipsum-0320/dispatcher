@@ -65,7 +65,7 @@ func main() {
 					}
 				}(zoneId, siteList)
 			}
-		}, 15*time.Minute, ctx.Done())
+		}, time.Duration(15*60*1000/config.ACCELERATIONRATIO)*time.Millisecond, ctx.Done())
 	}
 
 	// 创建分布式锁。
