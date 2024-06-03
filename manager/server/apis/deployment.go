@@ -1,16 +1,12 @@
 package apis
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"manager/config"
-	k8s_client "manager/k8s-client"
 	"net/http"
 	"sync"
-	"time"
 
-	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/uuid"
@@ -151,7 +147,7 @@ func InstanceApply(w http.ResponseWriter, r *http.Request) {
 		wg    sync.WaitGroup
 		mu    sync.Mutex
 		count = 0
-		err   error
+		// err   error
 	)
 	for i := 1; i <= int(reqBody.Number); i++ {
 
@@ -161,46 +157,55 @@ func InstanceApply(w http.ResponseWriter, r *http.Request) {
 
 			randomId := uuid.NewUUID()
 			podName := fmt.Sprintf("cloudgame-center-%s", randomId)
-			serviceName := fmt.Sprintf("service-%s", podName)
+			// serviceName := fmt.Sprintf("service-%s", podName)
 			instanceId := fmt.Sprintf("instance-%s", podName)
 
-			// 部署Pod和Service
-			pod := podFactory(podName, zoneId)
-			if _, err := k8s_client.TargetClient.CoreV1().Pods(config.K8SNAMSPACE).Create(context.TODO(), pod, metav1.CreateOptions{}); err != nil {
-				fmt.Printf("Failed to create pod: %v\n", err)
-				return
-			}
-			service := serviceFactory(serviceName, podName)
-			if _, err := k8s_client.TargetClient.CoreV1().Services(config.K8SNAMSPACE).Create(context.TODO(), service, metav1.CreateOptions{}); err != nil {
-				fmt.Printf("Failed to create service: %v\n", err)
-				return
-			}
+			// // 部署Pod和Service
+			// pod := podFactory(podName, zoneId)
+			// if _, err := k8s_client.TargetClient.CoreV1().Pods(config.K8SNAMSPACE).Create(context.TODO(), pod, metav1.CreateOptions{}); err != nil {
+			// 	fmt.Printf("Failed to create pod: %v\n", err)
+			// 	return
+			// }
+			// service := serviceFactory(serviceName, podName)
+			// if _, err := k8s_client.TargetClient.CoreV1().Services(config.K8SNAMSPACE).Create(context.TODO(), service, metav1.CreateOptions{}); err != nil {
+			// 	fmt.Printf("Failed to create service: %v\n", err)
+			// 	return
+			// }
 
-			// 等待Pod和Service部署完成
-			time.Sleep(1 * time.Second)
-			if pod, err = k8s_client.TargetClient.CoreV1().Pods(config.K8SNAMSPACE).Get(context.Background(), podName, metav1.GetOptions{}); err != nil {
-				fmt.Printf("Failed to get pod: %v\n", err)
+			// // 等待Pod和Service部署完成
+			// time.Sleep(1 * time.Second)
+			// if pod, err = k8s_client.TargetClient.CoreV1().Pods(config.K8SNAMSPACE).Get(context.Background(), podName, metav1.GetOptions{}); err != nil {
+			// 	fmt.Printf("Failed to get pod: %v\n", err)
+			// 	return
+			// }
+			// if service, err = k8s_client.TargetClient.CoreV1().Services(config.K8SNAMSPACE).Get(context.Background(), serviceName, metav1.GetOptions{}); err != nil {
+			// 	fmt.Printf("Failed to get service: %v\n", err)
+			// 	return
+			// }
+
+			// for _, port := range service.Spec.Ports {
+			// 	if port.NodePort != 0 {
+			// 		err := mysql_service.InsertInstance(zoneId, "null", pod.Status.HostIP, instanceId, podName, int(port.NodePort), 1, "available", "null")
+			// 		if err != nil {
+			// 			fmt.Printf("Failed to insert instance into database: %v\n", err)
+			// 			return
+			// 		}
+
+			// 		mu.Lock()
+			// 		count++
+			// 		mu.Unlock()
+			// 		break
+			// 	}
+			// }
+
+			err := mysql_service.InsertInstance(zoneId, "null", "0.0.0.0", instanceId, podName, 30000, 1, "available", "null")
+			if err != nil {
+				fmt.Printf("Failed to insert instance into database: %v\n", err)
 				return
 			}
-			if service, err = k8s_client.TargetClient.CoreV1().Services(config.K8SNAMSPACE).Get(context.Background(), serviceName, metav1.GetOptions{}); err != nil {
-				fmt.Printf("Failed to get service: %v\n", err)
-				return
-			}
-
-			for _, port := range service.Spec.Ports {
-				if port.NodePort != 0 {
-					err := mysql_service.InsertInstance(zoneId, "null", pod.Status.HostIP, instanceId, podName, int(port.NodePort), 1, "available", "null")
-					if err != nil {
-						fmt.Printf("Failed to insert instance into database: %v\n", err)
-						return
-					}
-
-					mu.Lock()
-					count++
-					mu.Unlock()
-					break
-				}
-			}
+			mu.Lock()
+			count++
+			mu.Unlock()
 
 		}(reqBody.ZoneId)
 	}
@@ -213,14 +218,14 @@ func InstanceApply(w http.ResponseWriter, r *http.Request) {
 			Message:    "OK",
 			Data:       "All instances applied successfully",
 		}, http.StatusOK)
-		fmt.Printf("%d instances applied successfully", count)
+		fmt.Printf("%d instances applied successfully\n", count)
 	} else {
 		SendErrorResponse(w, &ErrorCodeWithMessage{
 			HttpStatus: http.StatusInternalServerError,
 			ErrorCode:  500,
 			Message:    "Internal server error",
 		}, "There was something wrong when applying some instances")
-		fmt.Printf("There is something wrong: %d instances failed to apply", int(reqBody.Number)-count)
+		fmt.Printf("There is something wrong: %d instances failed to apply\n", int(reqBody.Number)-count)
 	}
 }
 
@@ -259,24 +264,24 @@ func InstanceRelease(w http.ResponseWriter, r *http.Request) {
 		go func(podName string) {
 			defer wg.Done()
 
-			if err := k8s_client.TargetClient.CoreV1().Pods(config.K8SNAMSPACE).Delete(context.TODO(), podName, metav1.DeleteOptions{}); err != nil {
-				if errors.IsNotFound(err) {
-					fmt.Printf("Pod %s not found in namespace %s\n", podName, config.K8SNAMSPACE)
-				} else {
-					fmt.Printf("Failed to delete pod %s in namesapce %s: %v\n", podName, config.K8SNAMSPACE, err)
-				}
-				return
-			}
+			// if err := k8s_client.TargetClient.CoreV1().Pods(config.K8SNAMSPACE).Delete(context.TODO(), podName, metav1.DeleteOptions{}); err != nil {
+			// 	if errors.IsNotFound(err) {
+			// 		fmt.Printf("Pod %s not found in namespace %s\n", podName, config.K8SNAMSPACE)
+			// 	} else {
+			// 		fmt.Printf("Failed to delete pod %s in namesapce %s: %v\n", podName, config.K8SNAMSPACE, err)
+			// 	}
+			// 	return
+			// }
 
-			serviceName := fmt.Sprintf("service-%s", podName)
-			if err := k8s_client.TargetClient.CoreV1().Services(config.K8SNAMSPACE).Delete(context.TODO(), serviceName, metav1.DeleteOptions{}); err != nil {
-				if errors.IsNotFound(err) {
-					fmt.Printf("Service %s not found in namespace %s\n", serviceName, config.K8SNAMSPACE)
-				} else {
-					fmt.Printf("Failed to delete service %s in namesapce %s: %v\n", serviceName, config.K8SNAMSPACE, err)
-				}
-				return
-			}
+			// serviceName := fmt.Sprintf("service-%s", podName)
+			// if err := k8s_client.TargetClient.CoreV1().Services(config.K8SNAMSPACE).Delete(context.TODO(), serviceName, metav1.DeleteOptions{}); err != nil {
+			// 	if errors.IsNotFound(err) {
+			// 		fmt.Printf("Service %s not found in namespace %s\n", serviceName, config.K8SNAMSPACE)
+			// 	} else {
+			// 		fmt.Printf("Failed to delete service %s in namesapce %s: %v\n", serviceName, config.K8SNAMSPACE, err)
+			// 	}
+			// 	return
+			// }
 			mu.Lock()
 			count++
 			mu.Unlock()
@@ -291,13 +296,13 @@ func InstanceRelease(w http.ResponseWriter, r *http.Request) {
 			Message:    "OK",
 			Data:       "All instances release successfully",
 		}, http.StatusOK)
-		fmt.Printf("%d instances released successfully", count)
+		fmt.Printf("%d instances released successfully\n", count)
 	} else {
 		SendErrorResponse(w, &ErrorCodeWithMessage{
 			HttpStatus: http.StatusInternalServerError,
 			ErrorCode:  500,
 			Message:    "Internal server error",
 		}, "There was something wrong when releasing some instances")
-		fmt.Printf("There is something wrong: %d instances failed to release", int(reqBody.Number)-count)
+		fmt.Printf("There is something wrong: %d instances failed to release\n", int(reqBody.Number)-count)
 	}
 }
