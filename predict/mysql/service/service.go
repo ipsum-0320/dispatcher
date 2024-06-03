@@ -36,7 +36,7 @@ func GetZoneListInDB() (map[string][]string, error) {
 }
 
 func GetSiteListInZone(ZoneID string) ([]string, error) {
-	rows, err := mysql.DB.Query(fmt.Sprintf("SELECT DISTINCT site_id FROM instance_%s", ZoneID))
+	rows, err := mysql.DB.Query(fmt.Sprintf("SELECT DISTINCT site_id FROM instance_%s WHERE site_id != 'null'", ZoneID))
 	if err != nil {
 		return nil, err
 	}
