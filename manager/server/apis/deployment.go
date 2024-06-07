@@ -258,7 +258,7 @@ func ensureK8sDBConsistency(zoneId string) error {
 				return
 			}
 
-			if err := checkInstanceStatus(zoneId, pod.Status.PodIP, nodePort, instanceName); err != nil {
+			if err := checkInstanceStatus(zoneId, pod.Status.HostIP, nodePort, instanceName); err != nil {
 				fmt.Printf("Failed to check instance status: %v\n", err)
 				return
 			}
