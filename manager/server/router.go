@@ -8,9 +8,8 @@ import (
 )
 
 var (
-	healthzPath     = "/healthz"
-	instanceApply   = "/instance/apply"
-	instanceRelease = "/instance/release"
+	healthzPath    = "/healthz"
+	instanceManage = "/instance/manage"
 )
 
 func NewRouter() *mux.Router {
@@ -23,14 +22,8 @@ func NewRouter() *mux.Router {
 
 	router.
 		Methods(http.MethodPost).
-		Path(instanceApply).
-		Name("instanceApply").
-		HandlerFunc(apis.InstanceApply)
-	router.
-		Methods(http.MethodPost).
-		Path(instanceRelease).
-		Name("instanceRelease").
-		HandlerFunc(apis.InstanceRelease)
-
+		Path(instanceManage).
+		Name("instanceManage").
+		HandlerFunc(apis.InstanceManage)
 	return router
 }

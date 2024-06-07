@@ -1,6 +1,7 @@
 package service
 
 import (
+	"database/sql"
 	"fmt"
 	"log"
 	"manager/mysql"
@@ -47,4 +48,67 @@ func GetAndDeleteAvailableInstancesInCenter(zoneId string, num int32) ([]string,
 	}
 
 	return podList, nil
+}
+
+func GetAvailableInstanceInCenter(zoneId string) (int32, error) {
+	rows, err := mysql.DB.Query(fmt.Sprintf("SELECT DISTINCT count(*) AS COUNT FROM instance_%s WHERE is_elastic = 1 AND status = 'available'", zoneId))
+	if err != nil {
+		fmt.Printf("%s: query current available instance failed, err: %v\n", zoneId, err)
+		return 0, err
+	}
+	defer func(query *sql.Rows) {
+		if err := query.Close(); err != nil {
+			fmt.Printf("%s: close current available instance failed, err: %v\n", zoneId, err)
+		}
+	}(rows)
+
+	var count int32
+	if rows.Next() {
+		if err := rows.Scan(&count); err != nil {
+			fmt.Printf("%s: scan current available instance failed, err: %v\n", zoneId, err)
+			return 0, err
+		}
+	}
+	return count, nil
+}
+
+func SynchronizeInstanceStatus(zoneId string, instanceName string, status string) error {
+	statusInDB, err := getInstanceStatus(zoneId, instanceName)
+	if err != nil {
+		return err
+	}
+
+	if statusInDB != status {
+		return updateInstanceStatus(zoneId, instanceName, status)
+	}
+
+	return nil
+}
+
+func getInstanceStatus(zoneId string, instanceName string) (string, error) {
+	row := mysql.DB.QueryRow(fmt.Sprintf("SELECT status FROM instance_%s WHERE instance_id = ?", zoneId), instanceName)
+	var status string
+	err := row.Scan(&status)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return "", fmt.Errorf("pod with name %s not found in the database : %w", instanceName, err)
+		}
+		return "", fmt.Errorf("error scanning row: %w", err)
+	}
+	return status, nil
+}
+
+func updateInstanceStatus(zoneId string, instanceName string, status string) error {
+	result, err := mysql.DB.Exec(fmt.Sprintf("UPDATE instance_%s SET status = ? WHERE instance_id = ?", zoneId), status, instanceName)
+	if err != nil {
+		return fmt.Errorf("error executing update: %w", err)
+	}
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("error getting rows affected: %w", err)
+	}
+	if rowsAffected == 0 {
+		return fmt.Errorf("no rows were updated")
+	}
+	return nil
 }

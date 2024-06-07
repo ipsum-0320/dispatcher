@@ -19,7 +19,7 @@ func AbsInt(n int32) int32 {
 	return n
 }
 
-func CalculateApplyNumberForSite(predResponse *timesnet.PredDataResponse, zoneId string, siteId string) (int32, error) {
+func CalculateMissingInstancesForSite(predResponse *timesnet.PredDataResponse, zoneId string, siteId string) (int32, error) {
 	// 1. 拿到预测值中的最大值。
 	maxPred := math.SmallestNonzeroFloat64
 	for _, pred := range predResponse.Pred {
@@ -44,7 +44,7 @@ func CalculateApplyNumberForSite(predResponse *timesnet.PredDataResponse, zoneId
 	unAllocateInstances := int32(maxPred - float64(siteInstances+centerInstances))
 	// 2.5. 计算边缘站点还有多少容量可以利用。
 	capacitySiteInstances := maxSiteInstances - siteInstances
-	// 2.6. 只有当预测到实例增加，且边缘站点空闲实例数不足以支撑时，才需要额外申请弹性实例。
+	// 2.6. 只有当预测到实例增加，且边缘站点空闲实例数不足以支撑时，才需要额外的弹性实例。
 	if unAllocateInstances >= 0 && capacitySiteInstances < unAllocateInstances {
 		return int32(unAllocateInstances - capacitySiteInstances), nil
 	}
@@ -52,25 +52,16 @@ func CalculateApplyNumberForSite(predResponse *timesnet.PredDataResponse, zoneId
 	return 0, nil
 }
 
-func Manage(zoneId string, replica int32) error {
-	var path string
-	if replica == 0 {
-		fmt.Printf("Replica is 0, no need to apply or release instances\n")
-		return nil
-	} else if replica > 0 {
-		path = "/instance/apply"
-		fmt.Printf("%d instances need to be applied\n", replica)
-	} else {
-		path = "/instance/release"
-		replica = -replica
-		fmt.Printf("%d instances need to be released\n", replica)
-	}
+// zoneId: 区域id
+// missing: 该zone各个边缘缺少的实例总量
+func Manage(zoneId string, missing int32) error {
+	var path = "/instance/manage"
 
 	url := fmt.Sprintf("%s://%s:%s%s", config.MANAGERPROTOCOL, config.MANAGERHOST, config.MANAGERPORT, path)
 
 	requestBodyData := map[string]interface{}{
 		"zone_id": zoneId,
-		"number":  replica,
+		"missing": missing,
 	}
 
 	jsonData, err := json.Marshal(requestBodyData)

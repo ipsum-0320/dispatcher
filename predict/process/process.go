@@ -6,12 +6,10 @@ import (
 	"predict/mysql"
 	"predict/timesnet"
 	"sync"
-
-	mysql_service "predict/mysql/service"
 )
 
 func Process(zoneId string, siteList []string) error {
-	zoneApply := int32(0)
+	zoneMissing := int32(0)
 
 	var wg sync.WaitGroup
 	var mu sync.Mutex
@@ -58,25 +56,19 @@ func Process(zoneId string, siteList []string) error {
 				fmt.Printf("%s-%s: predict failed, err:%v\n", zoneId, siteId, err)
 				panic(fmt.Sprintf("%s-%s: predict failed, err:%v\n", zoneId, siteId, err))
 			}
-			siteApply, err := manager.CalculateApplyNumberForSite(predResponse, zoneId, siteId)
+			siteMissing, err := manager.CalculateMissingInstancesForSite(predResponse, zoneId, siteId)
 			if err != nil {
 				fmt.Printf("%s-%s: calc failed, err:%v\n", zoneId, siteId, err)
 				panic(fmt.Sprintf("%s-%s: calc failed, err:%v\n", zoneId, siteId, err))
 			}
 			mu.Lock()
-			zoneApply += siteApply
+			zoneMissing += siteMissing
 			mu.Unlock()
 		}(zoneId, siteId)
 	}
 	wg.Wait()
 
-	centerAvailable, err := mysql_service.GetAvailableInstanceInCenter(zoneId)
-	if err != nil {
-		fmt.Printf("Failed to get available instances in %s center: %v\n", zoneId, err)
-		return err
-	}
-
-	if err = manager.Manage(zoneId, zoneApply-centerAvailable); err != nil {
+	if err := manager.Manage(zoneId, zoneMissing); err != nil {
 		fmt.Printf("Failed to apply or release instances in %s center: %v\n", zoneId, err)
 		return err
 	}
