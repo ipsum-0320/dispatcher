@@ -29,6 +29,8 @@ func init() {
 	if err != nil {
 		log.Fatalf("Error creating target Kubernetes config: %v", err)
 	}
+	c.QPS = 500    // QPS 参数定义了客户端每秒钟可以发送到 API 服务器的最大请求数。这是一个平均值，客户端会尝试不超过这个速率。
+	c.Burst = 1000 // Burst 参数定义了在短时间内可以发送到 API 服务器的请求的最大数量，即使这会超过 QPS 设置的速率。当突发请求完成后，客户端将降低请求速率以遵守 QPS 的限制。
 
 	TargetClient, err = kubernetes.NewForConfig(c)
 	if err != nil {

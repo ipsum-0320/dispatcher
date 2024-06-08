@@ -8,7 +8,6 @@ import (
 	"manager/config"
 	"net/http"
 	"sync"
-	"time"
 
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -181,7 +180,7 @@ func InstanceManage(w http.ResponseWriter, r *http.Request) {
 			Message:    "OK",
 			Data:       "Replica is 0, there is no need to apply or release instances",
 		}, http.StatusOK)
-		fmt.Println("Replica is 0, there is no need to apply or release instances")
+		fmt.Printf("%s: Replica is 0, there is no need to apply or release instances\n", reqBody.ZoneId)
 	} else if replica > 0 {
 		if err := apply(reqBody.ZoneId, replica); err != nil {
 			fmt.Printf("Failed to apply instances: %v\n", err)
@@ -197,7 +196,8 @@ func InstanceManage(w http.ResponseWriter, r *http.Request) {
 			Message:    "OK",
 			Data:       "All instances applied successfully",
 		}, http.StatusOK)
-		fmt.Printf("%d instances applied successfully\n", replica)
+		fmt.Printf("%s: %d instances applied successfully\n", reqBody.ZoneId, replica)
+
 	} else {
 		if err := release(reqBody.ZoneId, -replica); err != nil {
 			fmt.Printf("Failed to release instances: %v\n", err)
@@ -213,16 +213,29 @@ func InstanceManage(w http.ResponseWriter, r *http.Request) {
 			Message:    "OK",
 			Data:       "All instances release successfully",
 		}, http.StatusOK)
-		fmt.Printf("%d instances released successfully\n", -replica)
+		fmt.Printf("%s: %d instances released successfully\n", reqBody.ZoneId, -replica)
 	}
 }
 
+// 过滤得到运行中的实例
+func filterRunningPods(podList *corev1.PodList) []corev1.Pod {
+	runningPods := make([]corev1.Pod, 0)
+	for _, pod := range podList.Items {
+		if pod.Status.Phase == corev1.PodRunning {
+			runningPods = append(runningPods, pod)
+		}
+	}
+	return runningPods
+}
+
 func ensureK8sDBConsistency(zoneId string) error {
-	// 1. 从集群中获取对应zone下的弹性实例
-	podLabelSelector := fmt.Sprintf("zone_id=%s,is_elastic=1", zoneId)
+	// 1. 从集群中获取对应zone下的实例
+	podLabelSelector := fmt.Sprintf("zone_id=%s", zoneId)
 	podList, err := k8s_client.TargetClient.CoreV1().Pods(config.K8SNAMSPACE).List(context.Background(), metav1.ListOptions{
 		LabelSelector: podLabelSelector,
 	})
+	runningPodList := filterRunningPods(podList)
+
 	if err != nil {
 		return fmt.Errorf("failed to get pod list from kubernetes: %w", err)
 	}
@@ -233,7 +246,7 @@ func ensureK8sDBConsistency(zoneId string) error {
 	)
 
 	// 2. 遍历pod，确认和数据库状态一致
-	for _, pod := range podList.Items {
+	for _, pod := range runningPodList {
 		wg.Add(1)
 		go func(pod corev1.Pod) {
 			defer wg.Done()
@@ -270,8 +283,8 @@ func ensureK8sDBConsistency(zoneId string) error {
 	}
 	wg.Wait()
 
-	if int(count) != len(podList.Items) {
-		fmt.Printf("There are %d elastic instances in %s totally, and %d instances failed to synchronized\n", len(podList.Items), zoneId, len(podList.Items)-int(count))
+	if int(count) != len(runningPodList) {
+		fmt.Printf("There are %d elastic instances in %s totally, and %d instances failed to synchronized\n", len(runningPodList), zoneId, len(runningPodList)-int(count))
 	}
 	return nil
 }
@@ -304,7 +317,6 @@ func apply(zoneId string, replica int32) error {
 		wg    sync.WaitGroup
 		mu    sync.Mutex
 		count = int32(0)
-		err   error
 	)
 	for i := 1; i <= int(replica); i++ {
 
@@ -329,37 +341,50 @@ func apply(zoneId string, replica int32) error {
 				return
 			}
 
-			// 等待Pod和Service部署完成
-			time.Sleep(1 * time.Second)
-			if pod, err = k8s_client.TargetClient.CoreV1().Pods(config.K8SNAMSPACE).Get(context.Background(), podName, metav1.GetOptions{}); err != nil {
-				fmt.Printf("Failed to get pod: %v\n", err)
-				return
+			// 获取服务端口
+			var nodePort int32
+			for nodePort == 0 {
+				service, err := k8s_client.TargetClient.CoreV1().Services(config.K8SNAMSPACE).Get(context.Background(), serviceName, metav1.GetOptions{})
+				if err != nil {
+					fmt.Printf("Failed to get service: %v\n", err)
+					return
+				}
+				for _, port := range service.Spec.Ports {
+					if port.NodePort != 0 {
+						nodePort = port.NodePort
+						break
+					}
+				}
 			}
-			if service, err = k8s_client.TargetClient.CoreV1().Services(config.K8SNAMSPACE).Get(context.Background(), serviceName, metav1.GetOptions{}); err != nil {
-				fmt.Printf("Failed to get service: %v\n", err)
+
+			// 循环等待直到Pod部署完成
+			for pod.Status.Phase != corev1.PodRunning {
+				var err error
+				pod, err = k8s_client.TargetClient.CoreV1().Pods(config.K8SNAMSPACE).Get(context.Background(), podName, metav1.GetOptions{})
+				if err != nil {
+					fmt.Printf("Failed to get pod: %v\n", err)
+					return
+				}
+			}
+
+			// 部署完成后才能保存实例到数据库
+			err := mysql_service.InsertInstance(zoneId, "null", pod.Status.HostIP, instanceId, podName, int(nodePort), 1, "available", "null")
+			if err != nil {
+				fmt.Printf("Failed to insert instance into database: %v\n", err)
 				return
 			}
 
-			for _, port := range service.Spec.Ports {
-				if port.NodePort != 0 {
-					err := mysql_service.InsertInstance(zoneId, "null", pod.Status.HostIP, instanceId, podName, int(port.NodePort), 1, "available", "null")
-					if err != nil {
-						fmt.Printf("Failed to insert instance into database: %v\n", err)
-						return
-					}
-					mu.Lock()
-					count++
-					mu.Unlock()
-					break
-				}
-			}
+			// 计算成功部署的实例数量
+			mu.Lock()
+			count++
+			mu.Unlock()
 		}(zoneId)
 	}
 
 	wg.Wait()
 
 	if count != replica {
-		return fmt.Errorf("%d instances failed to apply", replica-count)
+		return fmt.Errorf("%d instances need to be applied, but %d instances failed to apply", replica, replica-count)
 	}
 
 	return nil

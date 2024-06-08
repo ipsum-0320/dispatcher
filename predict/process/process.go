@@ -17,7 +17,7 @@ func Process(zoneId string, siteList []string) error {
 		wg.Add(1)
 		go func(zoneId string, siteId string) {
 			defer wg.Done()
-			queryDateInstanceSQL := fmt.Sprintf("SELECT id, site_id, date, instances FROM record_%s WHERE site_id = '%s' ORDER BY date DESC LIMIT 180", zoneId, siteId)
+			queryDateInstanceSQL := fmt.Sprintf("SELECT site_id, date, instances FROM record_%s WHERE site_id = '%s' ORDER BY date DESC LIMIT 180", zoneId, siteId)
 			DateInstanceRows, err := mysql.DB.Query(queryDateInstanceSQL)
 			if err != nil {
 				fmt.Printf("%s-%s, query date instance failed, err:%v\n", zoneId, siteId, err)
@@ -26,12 +26,11 @@ func Process(zoneId string, siteList []string) error {
 			predMap := make(timesnet.PredDataSource)
 			for DateInstanceRows.Next() {
 				var (
-					id        int64
 					siteId    string
 					date      string
 					instances int32
 				)
-				if err := DateInstanceRows.Scan(&id, &siteId, &date, &instances); err != nil {
+				if err := DateInstanceRows.Scan(&siteId, &date, &instances); err != nil {
 					fmt.Printf("%s-%s: scan date instance failed: %v\n", zoneId, siteId, err)
 					panic(fmt.Sprintf("%s-%s: scan date instance failed: %v\n", zoneId, siteId, err))
 				}
