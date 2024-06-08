@@ -306,7 +306,7 @@ func checkInstanceStatus(zoneId string, host string, port int32, instanceName st
 	status := string(body)
 
 	if err := mysql_service.SynchronizeInstanceStatus(zoneId, instanceName, status); err != nil {
-		fmt.Printf("Failed to synchronize instance status for %s: %v\n", instanceName, err)
+		return fmt.Errorf("failed to synchronize instance status for %s: %w", instanceName, err)
 	}
 
 	return nil
