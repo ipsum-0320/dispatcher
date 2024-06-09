@@ -1,6 +1,7 @@
 package apis
 
 import (
+	"fmt"
 	mysqlservice "manager/mysql/service"
 	"net/http"
 	"time"
@@ -22,11 +23,12 @@ type BounceRateResponse struct {
 func BounceRate(w http.ResponseWriter, r *http.Request) {
 	// 通过 Query 的形式传递参数。
 	query := r.URL.Query()
-	// 参数格式："2006-01-02 15:04:05"，必须要保证秒数是 0。
+	layout := "2006-01-02 15:04:00"
+	// 参数格式："2006-01-02 15:04:00"，必须要保证秒数是 0。
 	start := query.Get("start")
 	end := query.Get("end")
 
-	tStart, err := time.Parse(start, start)
+	tStart, err := time.Parse(layout, start)
 	if err != nil {
 		SendHttpResponse(w, &Response{
 			StatusCode: 400,
@@ -35,7 +37,7 @@ func BounceRate(w http.ResponseWriter, r *http.Request) {
 		}, http.StatusBadRequest)
 		return
 	}
-	tEnd, err := time.Parse(end, end)
+	tEnd, err := time.Parse(layout, end)
 	if err != nil {
 		SendHttpResponse(w, &Response{
 			StatusCode: 400,
@@ -47,11 +49,11 @@ func BounceRate(w http.ResponseWriter, r *http.Request) {
 
 	var predTrueList []mysqlservice.PredTrue
 	for t := tStart; t.Before(tEnd) || t.Equal(tEnd); t = t.Add(time.Minute) {
-		predTrue, err := mysqlservice.GetBounceRecord("zoneId", t.Format(start))
+		predTrue, err := mysqlservice.GetBounceRecord("huadong", t.Format(layout))
 		if err != nil {
 			SendHttpResponse(w, &Response{
 				StatusCode: 500,
-				Message:    "Get bounce record failed",
+				Message:    fmt.Sprintf("Get bounce record failed, err: %v", err),
 				Data:       nil,
 			}, http.StatusInternalServerError)
 			return
@@ -70,7 +72,7 @@ func BounceRate(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	bingoRate := float64(bingoNum) / float64(len(predTrueList))
-	saveRate := 1 - (predSum / total)
+	saveRate := 1 - ((predSum / float64(len(predTrueList))) / total)
 
 	SendHttpResponse(w, &Response{
 		StatusCode: 0,
