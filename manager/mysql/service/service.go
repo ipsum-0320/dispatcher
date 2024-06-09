@@ -112,3 +112,29 @@ func updateInstanceStatus(zoneId string, instanceName string, status string) err
 	}
 	return nil
 }
+
+type PredTrue struct {
+	True int32   `json:"true"`
+	Pred float64 `json:"pred"`
+}
+
+func GetBounceRecord(zoneId string, date string) (*PredTrue, error) {
+	rows, err := mysql.DB.Query(fmt.Sprintf("SELECT * FROM instance_%s WHERE date = ?", zoneId), date)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var trueIns int32
+	var predIns float64
+	if rows.Next() {
+		if err = rows.Scan(&trueIns, &predIns); err != nil {
+			return nil, err
+		}
+	}
+
+	return &PredTrue{
+		Pred: predIns,
+		True: trueIns,
+	}, nil
+}
