@@ -19,11 +19,15 @@ func NewRouter() *mux.Router {
 		Path(healthzPath).
 		Name("healthz").
 		HandlerFunc(apis.Healthz)
-
 	router.
 		Methods(http.MethodPost).
 		Path(instanceManage).
 		Name("instanceManage").
 		HandlerFunc(apis.InstanceManage)
+	router.
+		Methods(http.MethodGet).
+		Path("/bounce/rate").
+		Name("bounceRate").
+		HandlerFunc(apis.BounceRate)
 	return router
 }

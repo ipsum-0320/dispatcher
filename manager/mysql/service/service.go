@@ -119,7 +119,7 @@ type PredTrue struct {
 }
 
 func GetBounceRecord(zoneId string, date string) (*PredTrue, error) {
-	rows, err := mysql.DB.Query(fmt.Sprintf("SELECT * FROM instance_%s WHERE date = ?", zoneId), date)
+	rows, err := mysql.DB.Query(fmt.Sprintf("SELECT * FROM bounce_%s WHERE date = ?", zoneId), date)
 	if err != nil {
 		return nil, err
 	}

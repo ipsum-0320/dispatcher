@@ -111,6 +111,58 @@ func QueryCurrentSiteInstances(zoneId string, siteId string, isElastic bool) (in
 	return count, nil
 }
 
+func InsertBounceRecord(zoneId string, date string, trueIns int32) error {
+	query := fmt.Sprintf("INSERT INTO bounce_%s (date, true_instances) VALUES (?, ?)", zoneId)
+	stmt, err := mysql.DB.Prepare(query)
+	if err != nil {
+		return err
+	}
+	defer stmt.Close()
+	_, err = stmt.Exec(date, trueIns)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func UpdateBounceRecord(zoneId string, date string, predIns int32) error {
+	query := fmt.Sprintf("UPDATE bounce_%s SET pred_instances = ? WHERE date = ?", zoneId)
+	stmt, err := mysql.DB.Prepare(query)
+	if err != nil {
+		return err
+	}
+	defer stmt.Close()
+	_, err = stmt.Exec(date, predIns)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func QueryCenterInstances(zoneId string) (int32, error) {
+	rows, err := mysql.DB.Query(fmt.Sprintf("SELECT DISTINCT count(*) AS COUNT FROM instance_%s WHERE is_elastic = 1", zoneId))
+	if err != nil {
+		fmt.Printf("%s: query center instances failed, err:%v\n", zoneId, err)
+		return 0, err
+	}
+	defer func(query *sql.Rows) {
+		err := query.Close()
+		if err != nil {
+			fmt.Printf("%s: close center instances failed, err:%v\n", zoneId, err)
+		}
+	}(rows)
+	var (
+		count int32
+	)
+	if rows.Next() {
+		if err := rows.Scan(&count); err != nil {
+			fmt.Printf("%s: scan center instances failed, err:%v\n", zoneId, err)
+			return 0, err
+		}
+	}
+	return count, nil
+}
+
 func siteOrCloud(isElastic bool) string {
 	if isElastic {
 		return "cloud"
