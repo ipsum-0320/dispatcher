@@ -41,9 +41,6 @@ docker build . -t dispatcher-predict
 cd ~/dispatcher/deploys/deployments/
 ```
 
-测试 save rate 的接口：
-```bash
-curl -X GET "http://localhost:31365/bounce/rate" \
---data-urlencode "start=2024-05-09 12:00:00" \
---data-urlencode "end=2024-05-09 12:10:00"
-```
+测试 save rate 的接口，请使用 apifox 等工具，因为其会对空格 query 进行转译。
+
+![img.png](img/apifox.png)
