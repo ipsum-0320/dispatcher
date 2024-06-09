@@ -53,6 +53,7 @@ func Process(zoneId string, siteList []string) error {
 					fmt.Printf("%s-%s: parse date failed: %v\n", zoneId, siteId, err)
 					panic(fmt.Sprintf("%s-%s: parse date failed: %v\n", zoneId, siteId, err))
 				}
+				fmt.Printf("latestTime: %v, dateTime: %v\n", latestTime, dateTime)
 				if latestTime.Before(dateTime) {
 					latestTime = dateTime
 				}
@@ -126,7 +127,7 @@ func Process(zoneId string, siteList []string) error {
 		for _, timeString := range timeStrings {
 			err := mysqlservice.UpdateBounceRecord(zoneId, timeString, bounceInstance)
 			if err != nil {
-				fmt.Printf("%s: insert pred instance into bounce record failed, err: %v\n", zoneId, err)
+				fmt.Printf("%s: update pred instance into bounce record failed, err: %v\n", zoneId, err)
 			}
 		}
 	}
@@ -134,6 +135,8 @@ func Process(zoneId string, siteList []string) error {
 	TStart = &newStart
 	var err error
 	bounceInstance, err = mysqlservice.QueryCenterInstances(zoneId)
+	bounceInstance += 30 * 2
+	// 加上边缘站点的个数。
 	if err != nil {
 		fmt.Printf("%s: query center instances failed, err:%v\n", zoneId, err)
 		panic(fmt.Sprintf("%s: query center instances failed, err:%v\n", zoneId, err))

@@ -132,7 +132,7 @@ func UpdateBounceRecord(zoneId string, date string, predIns int32) error {
 		return err
 	}
 	defer stmt.Close()
-	_, err = stmt.Exec(date, predIns)
+	_, err = stmt.Exec(predIns, date)
 	if err != nil {
 		return err
 	}
