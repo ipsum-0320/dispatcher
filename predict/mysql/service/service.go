@@ -139,6 +139,24 @@ func UpdateBounceRecord(zoneId string, date string, predIns int32) error {
 	return nil
 }
 
+func QueryBounceRecordExist(zoneId string, date string) (bool, error) {
+	rows, err := mysql.DB.Query(fmt.Sprintf("SELECT * from bounce_%s WHERE date = '%s'", zoneId, date))
+	if err != nil {
+		fmt.Printf("%s: query bounce record exist failed, err:%v\n", zoneId, err)
+		return false, err
+	}
+	defer func(query *sql.Rows) {
+		err := query.Close()
+		if err != nil {
+			fmt.Printf("%s: close query bounce record exist failed, err:%v\n", zoneId, err)
+		}
+	}(rows)
+	if rows.Next() {
+		return true, nil
+	}
+	return false, nil
+}
+
 func QueryCenterInstances(zoneId string) (int32, error) {
 	rows, err := mysql.DB.Query(fmt.Sprintf("SELECT DISTINCT count(*) AS COUNT FROM instance_%s WHERE is_elastic = 1", zoneId))
 	if err != nil {

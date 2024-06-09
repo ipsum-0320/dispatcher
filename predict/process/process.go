@@ -108,7 +108,16 @@ func Process(zoneId string, siteList []string) error {
 	sort.Strings(sourceKeys)
 
 	for _, date := range sourceKeys {
-		err := mysqlservice.InsertBounceRecord(zoneId, date, dateInstanceMap[date])
+		// 插入之前需要检查一下是否已经插入过了。
+		isExist, err := mysqlservice.QueryBounceRecordExist(zoneId, date)
+		if err != nil {
+			fmt.Printf("%s: query bounce record exist failed, err: %v\n", zoneId, err)
+			return err
+		}
+		if isExist {
+			continue
+		}
+		err = mysqlservice.InsertBounceRecord(zoneId, date, dateInstanceMap[date])
 		if err != nil {
 			fmt.Printf("%s: insert true instances into bounce record failed, err: %v\n", zoneId, err)
 			return err

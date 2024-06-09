@@ -40,3 +40,8 @@ go build
 docker build . -t dispatcher-predict
 cd ~/dispatcher/deploys/deployments/
 ```
+
+测试 save rate 的接口：
+```bash
+curl -X GET 'http://localhost:9988/bounce/rate?start=2024-05-09 12:00:00&end=2024-05-09 12:10:00'
+```
