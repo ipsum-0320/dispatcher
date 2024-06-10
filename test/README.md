@@ -25,3 +25,12 @@ start.sh，用于打包镜像，重启系统
 测试 save rate 的接口，请使用 apifox 等工具，因为其会对空格 query 进行转译。
 
 ![img.png](img/apifox.png)
+
+连接 cloudgame 数据库如下:
+```bash
+mysql -h 10.10.103.51 -P 30565 -u root -p
+
+use cloudgame;
+
+show tables;
+```
