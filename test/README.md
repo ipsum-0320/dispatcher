@@ -2,44 +2,25 @@
 
 每次将新功能加入之后，都需要进行测试，以确保新功能的正确性。
 
-恢复到原始的测试环境包括如下步骤：
+shell目录下有reset.sh和start.sh两个脚本文件
 
-1. 要把K8S集群和数据库里的弹性实例都删掉，调用接口 manager 接口即可，在将 manager 拉起来的情况下，运行下面的脚本。
-```bash
-curl -X POST http://localhost:31365/instance/manage -d '{"zone_id":"huadong","missing":0}'
-```
-2. 向集群中的所有实例调用disconnect接口，断开连接，首先需要将本地的 server.go 拉起来，然后在命令行执行。
-```bash
-curl -X GET http://localhost:9988/disconnectAll
-```
-3. record数据表清空，然后插入开始时间之前的180条数据。
-```sql
-delete from record_huadong;
+reset.sh，用于恢复到原始的测试环境
+步骤如下：
+1. 停止fakeuser、predict和usercenter模块
+2. 重置数据库，包括修改instance_huadong表中实例状态为available、重置record_huadong表、清空bounce_huadong表
+3. 调用manager模块的接口，missing设置为0，实现释放K8S集群中所有弹性实例
+4. 调用DisconnectAllInstances程序，实现将K8S集群中所有实例断开连接(程序由main.go构建DisconnectAllInstances可执行程序)
+5. 停止manager模块
 
-insert into record_huadong select * from record_huadong_backup where date >= "2024-05-09 09:00:00" and date < "2024-05-09 12:00:00";
-```
-4. 将bounce数据表清空。
-```sql
-delete from bounce_huadong;
-```
 
-再之后，重新打包相关的镜像，以 predict 和 manager 为例，可有如下 bash 脚本:
-```bash
-cd ~/dispatcher/deploys/deployments/
-kubectl delete -f fakeuser.yaml
-kubectl delete -f predict.yaml
-kubectl delete -f manager.yaml
-docker rmi dispatcher-predict dispatcher-manager
-cd ~/dispatcher/manager/
-rm -rf manager
-go build 
-docker build . -t dispatcher-manager
-cd ~/dispatcher/predict/
-rm -rf predict
-go build 
-docker build . -t dispatcher-predict
-cd ~/dispatcher/deploys/deployments/
-```
+start.sh，用于打包镜像，重启系统
+如下步骤：
+1. 根据参数判断是否需要重新打包镜像
+2. 重启manager、usercenter模块
+3. 等待manager模块部署完成
+4. 重启predict模块
+5. 等待predict模块部署完成，并完成一次预测
+6. 部署fakeuser模块
 
 测试 save rate 的接口，请使用 apifox 等工具，因为其会对空格 query 进行转译。
 
