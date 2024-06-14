@@ -63,7 +63,7 @@ func BounceRate(w http.ResponseWriter, r *http.Request) {
 
 	bingoNum := 0
 	predSum := 0.0
-	total := 1210.0
+	total := 240.0
 
 	for _, pt := range predTrueList {
 		predSum += pt.Pred
