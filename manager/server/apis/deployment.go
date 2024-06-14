@@ -409,7 +409,9 @@ func release(zoneId string, replica int32) error {
 		go func(podName string) {
 			defer wg.Done()
 
-			if err := k8s_client.TargetClient.CoreV1().Pods(config.K8SNAMSPACE).Delete(context.TODO(), podName, metav1.DeleteOptions{}); err != nil {
+			if err := k8s_client.TargetClient.CoreV1().Pods(config.K8SNAMSPACE).Delete(context.TODO(), podName, metav1.DeleteOptions{
+				GracePeriodSeconds: func() *int64 { t := int64(0); return &t }(),
+			}); err != nil {
 				if errors.IsNotFound(err) {
 					fmt.Printf("Pod %s not found in namespace %s\n", podName, config.K8SNAMSPACE)
 				} else {
