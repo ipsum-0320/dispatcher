@@ -2,6 +2,7 @@ package apis
 
 import (
 	"fmt"
+	"manager/config"
 	mysqlservice "manager/mysql/service"
 	"net/http"
 	"time"
@@ -63,7 +64,7 @@ func BounceRate(w http.ResponseWriter, r *http.Request) {
 
 	bingoNum := 0
 	predSum := 0.0
-	total := 240.0
+	total := float64(config.TOTAL_HUADONG / config.INSTANCESCALERATIO)
 
 	for _, pt := range predTrueList {
 		predSum += pt.Pred

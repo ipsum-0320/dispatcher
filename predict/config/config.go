@@ -11,17 +11,18 @@ var (
 	TIMESNETPROTOCOL = "http" // 算法服务协议
 	MANAGERPROTOCOL  = "http" // 资源管理模块服务协议
 
-	K8SNAMSPACE       string // K8S命名空间
-	MYSQLHOST         string // MYSQL服务地址
-	MYSQLPORT         string // MYSQL服务端口
-	MYSQLUSER         string // MYSQL服务用户
-	MYSQLPASSWORD     string // MYSQL服务密码
-	MYSQLDATABASE     string // MYSQL服务数据库
-	MANAGERHOST       string // 资源管理模块服务地址
-	MANAGERPORT       string // 资源管理模块服务端口
-	TIMESNETHOST      string // 算法服务地址
-	TIMESNETPORT      string // 算法服务端口
-	ACCELERATIONRATIO int    // 加速比例
+	K8SNAMSPACE        string     // K8S命名空间
+	MYSQLHOST          string     // MYSQL服务地址
+	MYSQLPORT          string     // MYSQL服务端口
+	MYSQLUSER          string     // MYSQL服务用户
+	MYSQLPASSWORD      string     // MYSQL服务密码
+	MYSQLDATABASE      string     // MYSQL服务数据库
+	MANAGERHOST        string     // 资源管理模块服务地址
+	MANAGERPORT        string     // 资源管理模块服务端口
+	TIMESNETHOST       string     // 算法服务地址
+	TIMESNETPORT       string     // 算法服务端口
+	ACCELERATIONRATIO  int        // 加速比例
+	INSTANCESCALERATIO = int32(4) // 缩放比例
 )
 
 func init() {

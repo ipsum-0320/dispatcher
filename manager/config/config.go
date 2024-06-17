@@ -8,13 +8,15 @@ import (
 var (
 	MANAGERPORT = "6666" // 资源管理模块服务端口
 
-	K8SNAMSPACE   string // K8S命名空间
-	K8SCONFIGPATH string // K8S配置文件地址
-	MYSQLHOST     string // MYSQL服务地址
-	MYSQLPORT     string // MYSQL服务端口
-	MYSQLUSER     string // MYSQL服务用户
-	MYSQLPASSWORD string // MYSQL服务密码
-	MYSQLDATABASE string // MYSQL服务数据库
+	K8SNAMSPACE        string        // K8S命名空间
+	K8SCONFIGPATH      string        // K8S配置文件地址
+	MYSQLHOST          string        // MYSQL服务地址
+	MYSQLPORT          string        // MYSQL服务端口
+	MYSQLUSER          string        // MYSQL服务用户
+	MYSQLPASSWORD      string        // MYSQL服务密码
+	MYSQLDATABASE      string        // MYSQL服务数据库
+	INSTANCESCALERATIO = int32(4)    // 缩放比例
+	TOTAL_HUADONG      = int32(1210) // 华东实例总数
 )
 
 func init() {
