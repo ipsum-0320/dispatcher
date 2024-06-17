@@ -8,6 +8,7 @@ import (
 	"manager/config"
 	"net/http"
 	"sync"
+	"time"
 
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -51,12 +52,12 @@ func podFactory(
 					},
 					Resources: corev1.ResourceRequirements{
 						Limits: corev1.ResourceList{
-							corev1.ResourceCPU:    resource.MustParse("100m"),
-							corev1.ResourceMemory: resource.MustParse("128Mi"),
-						},
-						Requests: corev1.ResourceList{
 							corev1.ResourceCPU:    resource.MustParse("50m"),
 							corev1.ResourceMemory: resource.MustParse("64Mi"),
+						},
+						Requests: corev1.ResourceList{
+							corev1.ResourceCPU:    resource.MustParse("25m"),
+							corev1.ResourceMemory: resource.MustParse("32Mi"),
 						},
 					},
 				},
@@ -317,12 +318,14 @@ func apply(zoneId string, replica int32) error {
 		wg    sync.WaitGroup
 		mu    sync.Mutex
 		count = int32(0)
+		ch    = make(chan struct{}, 50)
 	)
 	for i := 1; i <= int(replica); i++ {
-
 		wg.Add(1)
+		ch <- struct{}{}
 		go func(zoneId string) {
 			defer wg.Done()
+			defer func() { <-ch }()
 
 			randomId := uuid.NewUUID()
 			podName := fmt.Sprintf("cloudgame-center-%s", randomId)
@@ -331,12 +334,12 @@ func apply(zoneId string, replica int32) error {
 
 			// 部署Pod和Service
 			pod := podFactory(instanceId, podName, zoneId)
-			if _, err := k8s_client.TargetClient.CoreV1().Pods(config.K8SNAMSPACE).Create(context.TODO(), pod, metav1.CreateOptions{}); err != nil {
+			if _, err := k8s_client.TargetClient.CoreV1().Pods(config.K8SNAMSPACE).Create(context.Background(), pod, metav1.CreateOptions{}); err != nil {
 				fmt.Printf("Failed to create pod: %v\n", err)
 				return
 			}
 			service := serviceFactory(serviceName, instanceId)
-			if _, err := k8s_client.TargetClient.CoreV1().Services(config.K8SNAMSPACE).Create(context.TODO(), service, metav1.CreateOptions{}); err != nil {
+			if _, err := k8s_client.TargetClient.CoreV1().Services(config.K8SNAMSPACE).Create(context.Background(), service, metav1.CreateOptions{}); err != nil {
 				fmt.Printf("Failed to create service: %v\n", err)
 				return
 			}
@@ -358,7 +361,24 @@ func apply(zoneId string, replica int32) error {
 			}
 
 			// 循环等待直到Pod部署完成
+			var (
+				startTime = time.Now()
+				timeout   = 3 * time.Minute
+			)
 			for pod.Status.Phase != corev1.PodRunning {
+				if time.Since(startTime) > timeout {
+					fmt.Printf("Deployment of %s for zone '%s' timed out after %v\n", podName, zoneId, timeout)
+					if err := k8s_client.TargetClient.CoreV1().Pods(config.K8SNAMSPACE).Delete(context.Background(), podName, metav1.DeleteOptions{
+						GracePeriodSeconds: func() *int64 { t := int64(0); return &t }(),
+					}); err != nil {
+						if errors.IsNotFound(err) {
+							fmt.Printf("Pod %s not found in namespace %s\n", podName, config.K8SNAMSPACE)
+						} else {
+							fmt.Printf("Failed to delete pod %s in namesapce %s: %v\n", podName, config.K8SNAMSPACE, err)
+						}
+					}
+					return
+				}
 				var err error
 				pod, err = k8s_client.TargetClient.CoreV1().Pods(config.K8SNAMSPACE).Get(context.Background(), podName, metav1.GetOptions{})
 				if err != nil {
@@ -409,7 +429,7 @@ func release(zoneId string, replica int32) error {
 		go func(podName string) {
 			defer wg.Done()
 
-			if err := k8s_client.TargetClient.CoreV1().Pods(config.K8SNAMSPACE).Delete(context.TODO(), podName, metav1.DeleteOptions{
+			if err := k8s_client.TargetClient.CoreV1().Pods(config.K8SNAMSPACE).Delete(context.Background(), podName, metav1.DeleteOptions{
 				GracePeriodSeconds: func() *int64 { t := int64(0); return &t }(),
 			}); err != nil {
 				if errors.IsNotFound(err) {
@@ -421,7 +441,7 @@ func release(zoneId string, replica int32) error {
 			}
 
 			serviceName := fmt.Sprintf("service-%s", podName)
-			if err := k8s_client.TargetClient.CoreV1().Services(config.K8SNAMSPACE).Delete(context.TODO(), serviceName, metav1.DeleteOptions{}); err != nil {
+			if err := k8s_client.TargetClient.CoreV1().Services(config.K8SNAMSPACE).Delete(context.Background(), serviceName, metav1.DeleteOptions{}); err != nil {
 				if errors.IsNotFound(err) {
 					fmt.Printf("Service %s not found in namespace %s\n", serviceName, config.K8SNAMSPACE)
 				} else {
