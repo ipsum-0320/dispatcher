@@ -36,7 +36,7 @@ type PredDataResponse struct {
 func Predict(source PredDataSource, zoneId string, siteId string) (*PredDataResponse, error) {
 	// 数据扩大n倍，用于预测
 	for date, value := range source {
-		source[date] = value * config.INSTANCESCALERATIO
+		source[date] = value * int32(config.SCALERATIO)
 	}
 
 	csvPath, err := source2csv(source, zoneId, siteId)
@@ -105,7 +105,7 @@ func Predict(source PredDataSource, zoneId string, siteId string) (*PredDataResp
 
 	// 数据缩小n倍，用于模拟
 	for i, value := range responseData.Pred {
-		responseData.Pred[i] = value / float64(config.INSTANCESCALERATIO)
+		responseData.Pred[i] = value / float64(config.SCALERATIO)
 	}
 	return &responseData, nil
 }

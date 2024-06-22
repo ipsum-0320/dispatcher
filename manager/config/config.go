@@ -3,20 +3,21 @@ package config
 import (
 	"log"
 	"os"
+	"strconv"
 )
 
 var (
 	MANAGERPORT = "6666" // 资源管理模块服务端口
 
-	K8SNAMSPACE        string        // K8S命名空间
-	K8SCONFIGPATH      string        // K8S配置文件地址
-	MYSQLHOST          string        // MYSQL服务地址
-	MYSQLPORT          string        // MYSQL服务端口
-	MYSQLUSER          string        // MYSQL服务用户
-	MYSQLPASSWORD      string        // MYSQL服务密码
-	MYSQLDATABASE      string        // MYSQL服务数据库
-	INSTANCESCALERATIO = int32(4)    // 缩放比例
-	TOTAL_HUADONG      = int32(1210) // 华东实例总数
+	K8SNAMSPACE   string // K8S命名空间
+	K8SCONFIGPATH string // K8S配置文件地址
+	MYSQLHOST     string // MYSQL服务地址
+	MYSQLPORT     string // MYSQL服务端口
+	MYSQLUSER     string // MYSQL服务用户
+	MYSQLPASSWORD string // MYSQL服务密码
+	MYSQLDATABASE string // MYSQL服务数据库
+	SCALERATIO    int    // 缩放比例
+	HUADONGTOTAL  int    // 华东实例总数
 )
 
 func init() {
@@ -53,5 +54,20 @@ func init() {
 	MYSQLDATABASE = os.Getenv("MYSQL_DATABASE")
 	if MYSQLDATABASE == "" {
 		log.Fatalf("Failed to get mysql database from env")
+	}
+
+	var err error
+	SCALERATIO, err = strconv.Atoi(os.Getenv("SCALE_RATIO"))
+	if err != nil {
+		log.Fatal("Failed to get instance scale ratio from env")
+	} else if SCALERATIO == 0 {
+		log.Fatal("Instance scale ratio cannot be zero")
+	}
+
+	HUADONGTOTAL, err = strconv.Atoi(os.Getenv("HUADONG_TOTAL"))
+	if err != nil {
+		log.Fatal("Failed to get number of total instances in huadong from env")
+	} else if HUADONGTOTAL == 0 {
+		log.Fatal("Number of total instances in huadong cannot be zero")
 	}
 }

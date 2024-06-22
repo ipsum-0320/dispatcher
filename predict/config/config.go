@@ -11,18 +11,19 @@ var (
 	TIMESNETPROTOCOL = "http" // 算法服务协议
 	MANAGERPROTOCOL  = "http" // 资源管理模块服务协议
 
-	K8SNAMSPACE        string     // K8S命名空间
-	MYSQLHOST          string     // MYSQL服务地址
-	MYSQLPORT          string     // MYSQL服务端口
-	MYSQLUSER          string     // MYSQL服务用户
-	MYSQLPASSWORD      string     // MYSQL服务密码
-	MYSQLDATABASE      string     // MYSQL服务数据库
-	MANAGERHOST        string     // 资源管理模块服务地址
-	MANAGERPORT        string     // 资源管理模块服务端口
-	TIMESNETHOST       string     // 算法服务地址
-	TIMESNETPORT       string     // 算法服务端口
-	ACCELERATIONRATIO  int        // 加速比例
-	INSTANCESCALERATIO = int32(4) // 缩放比例
+	K8SNAMSPACE       string // K8S命名空间
+	MYSQLHOST         string // MYSQL服务地址
+	MYSQLPORT         string // MYSQL服务端口
+	MYSQLUSER         string // MYSQL服务用户
+	MYSQLPASSWORD     string // MYSQL服务密码
+	MYSQLDATABASE     string // MYSQL服务数据库
+	MANAGERHOST       string // 资源管理模块服务地址
+	MANAGERPORT       string // 资源管理模块服务端口
+	TIMESNETHOST      string // 算法服务地址
+	TIMESNETPORT      string // 算法服务端口
+	ACCELERATIONRATIO int    // 加速比例
+	SCALERATIO        int    // 缩放比例
+	SITETOTAL         int    // 宁波和杭州边缘固定实例数
 )
 
 func init() {
@@ -82,5 +83,19 @@ func init() {
 		log.Fatal("Failed to get acceleration ratio from env")
 	} else if ACCELERATIONRATIO == 0 {
 		log.Fatal("Acceleration ratio cannot be zero")
+	}
+
+	SCALERATIO, err = strconv.Atoi(os.Getenv("SCALE_RATIO"))
+	if err != nil {
+		log.Fatal("Failed to get instance scale ratio from env")
+	} else if SCALERATIO == 0 {
+		log.Fatal("Instance scale ratio cannot be zero")
+	}
+
+	SITETOTAL, err = strconv.Atoi(os.Getenv("SITE_TOTAL"))
+	if err != nil {
+		log.Fatal("Failed to get number of instances in huadong's site from env")
+	} else if SITETOTAL == 0 {
+		log.Fatal("Number of instances in huadong's site cannot be zero")
 	}
 }

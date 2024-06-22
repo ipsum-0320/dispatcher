@@ -2,6 +2,7 @@ package process
 
 import (
 	"fmt"
+	"predict/config"
 	"predict/manager"
 	"predict/mysql"
 	mysqlservice "predict/mysql/service"
@@ -145,7 +146,7 @@ func Process(zoneId string, siteList []string) error {
 	TStart = &newStart
 	var err error
 	bounceInstance, err = mysqlservice.QueryCenterInstances(zoneId)
-	bounceInstance += 30 * 2
+	bounceInstance += int32(config.SITETOTAL) * 2
 	// 加上边缘站点的个数。
 	if err != nil {
 		fmt.Printf("%s: query center instances failed, err:%v\n", zoneId, err)

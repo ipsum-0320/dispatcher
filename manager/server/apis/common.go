@@ -64,7 +64,7 @@ func BounceRate(w http.ResponseWriter, r *http.Request) {
 
 	bingoNum := 0
 	predSum := 0.0
-	total := float64(config.TOTAL_HUADONG / config.INSTANCESCALERATIO)
+	total := float64(config.HUADONGTOTAL / config.SCALERATIO)
 
 	for _, pt := range predTrueList {
 		predSum += pt.Pred
