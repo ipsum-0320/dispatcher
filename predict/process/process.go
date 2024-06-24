@@ -13,9 +13,10 @@ import (
 )
 
 var (
-	TEnd   *time.Time = nil
-	TStart *time.Time = nil
-	layout            = "2006-01-02 15:04:05"
+	TEnd           *time.Time = nil
+	TStart         *time.Time = nil
+	bounceInstance int32      = -1
+	layout                    = "2006-01-02 15:04:05"
 )
 
 func Process(zoneId string, siteList []string) error {
@@ -140,7 +141,7 @@ func Process(zoneId string, siteList []string) error {
 		}
 		fmt.Printf("TODO: TStart: %s, TEnd: %s, timeStrings: %v \n", TStart.Format(layout), TEnd.Format(layout), timeStrings)
 		for _, timeString := range timeStrings {
-			err := mysqlservice.UpdateBounceRecord(zoneId, timeString, int32(zonePredInstance))
+			err := mysqlservice.UpdateBounceRecord(zoneId, timeString, bounceInstance)
 			if err != nil {
 				fmt.Printf("%s: update pred instance into bounce record failed, err: %v\n", zoneId, err)
 			}
@@ -148,6 +149,8 @@ func Process(zoneId string, siteList []string) error {
 	}
 	newStart := latestTime.Add(1 * time.Minute)
 	TStart = &newStart
+	bounceInstance = int32(zonePredInstance)
+
 	if err := manager.Manage(zoneId, zoneMissing); err != nil {
 		fmt.Printf("Failed to apply or release instances in %s center: %v\n", zoneId, err)
 		return err
