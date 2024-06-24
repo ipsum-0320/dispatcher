@@ -85,13 +85,13 @@ func Process(zoneId string, siteList []string) error {
 				maxPred = math.Max(maxPred, pred)
 			}
 			siteMissing, err := manager.CalculateMissingInstancesForSite(maxPred, zoneId, siteId)
-			zonePredInstance += maxPred
 			if err != nil {
 				fmt.Printf("%s-%s: calc failed, err:%v\n", zoneId, siteId, err)
 				panic(fmt.Sprintf("%s-%s: calc failed, err:%v\n", zoneId, siteId, err))
 			}
 			mu.Lock()
 			zoneMissing += siteMissing
+			zonePredInstance += maxPred
 			mu.Unlock()
 		}(zoneId, siteId)
 	}
