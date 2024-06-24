@@ -75,7 +75,7 @@ func Process(zoneId string, siteList []string) error {
 				fmt.Printf("%s-%s: date instance length is not 180\n", zoneId, siteId)
 				return
 			}
-			siteDateTrueInstanceMap[siteId] = predMap
+
 			predResponse, err := timesnet.Predict(predMap, zoneId, siteId)
 			if err != nil {
 				fmt.Printf("%s-%s: predict failed, err:%v\n", zoneId, siteId, err)
@@ -99,6 +99,7 @@ func Process(zoneId string, siteList []string) error {
 			}
 
 			mu.Lock()
+			siteDateTrueInstanceMap[siteId] = predMap
 			zoneFixed += siteCapacity
 			zoneMissing += siteMissing
 			mu.Unlock()
