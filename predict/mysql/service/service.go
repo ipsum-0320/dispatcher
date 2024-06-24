@@ -57,7 +57,7 @@ func GetSiteListInZone(ZoneID string) ([]string, error) {
 	return siteList, nil
 }
 
-func QueryMaxSiteInstances(zoneId string, siteId string) (int32, error) {
+func QuerySiteCapacity(zoneId string, siteId string) (int32, error) {
 	rows, err := mysql.DB.Query(fmt.Sprintf("SELECT DISTINCT count(*) AS COUNT FROM instance_%s WHERE is_elastic = 0 AND site_id = '%s'", zoneId, siteId))
 	if err != nil {
 		fmt.Printf("%s-%s: query max site instances failed, err:%v\n", zoneId, siteId, err)
@@ -81,22 +81,23 @@ func QueryMaxSiteInstances(zoneId string, siteId string) (int32, error) {
 	return count, nil
 }
 
-func QueryCurrentSiteInstances(zoneId string, siteId string, isElastic bool) (int32, error) {
+// position 表示是获取边缘还是中心正在使用的实例数量
+func QueryUsingInstances(zoneId string, siteId string, position string) (int32, error) {
 	var isElasticInt int32
-	if isElastic {
+	if position == "center" {
 		isElasticInt = 1
-	} else {
+	} else if position == "site" {
 		isElasticInt = 0
 	}
-	rows, err := mysql.DB.Query(fmt.Sprintf("SELECT DISTINCT count(*) AS COUNT FROM instance_%s WHERE is_elastic = %d AND site_id = '%s' AND status = 'available'", zoneId, isElasticInt, siteId))
+	rows, err := mysql.DB.Query(fmt.Sprintf("SELECT DISTINCT count(*) AS COUNT FROM instance_%s WHERE is_elastic = %d AND site_id = '%s' AND status = 'using'", zoneId, isElasticInt, siteId))
 	if err != nil {
-		fmt.Printf("%s-%s: query current %s instances failed, err:%v\n", zoneId, siteId, siteOrCloud(isElastic), err)
+		fmt.Printf("%s-%s: query current %s instances failed, err:%v\n", zoneId, siteId, position, err)
 		return 0, err
 	}
 	defer func(query *sql.Rows) {
 		err := query.Close()
 		if err != nil {
-			fmt.Printf("%s-%s: close current %s instances failed, err:%v\n", zoneId, siteId, siteOrCloud(isElastic), err)
+			fmt.Printf("%s-%s: close current %s instances failed, err:%v\n", zoneId, siteId, position, err)
 		}
 	}(rows)
 	var (
@@ -104,7 +105,7 @@ func QueryCurrentSiteInstances(zoneId string, siteId string, isElastic bool) (in
 	)
 	if rows.Next() {
 		if err := rows.Scan(&count); err != nil {
-			fmt.Printf("%s-%s: scan current %s instances failed, err:%v\n", zoneId, siteId, siteOrCloud(isElastic), err)
+			fmt.Printf("%s-%s: scan current %s instances failed, err:%v\n", zoneId, siteId, position, err)
 			return 0, err
 		}
 	}
@@ -179,12 +180,4 @@ func QueryCenterInstances(zoneId string) (int32, error) {
 		}
 	}
 	return count, nil
-}
-
-func siteOrCloud(isElastic bool) string {
-	if isElastic {
-		return "cloud"
-	} else {
-		return "site"
-	}
 }

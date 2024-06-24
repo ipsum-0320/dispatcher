@@ -18,25 +18,25 @@ func AbsInt(n int32) int32 {
 }
 
 func CalculateMissingInstancesForSite(maxPred float64, zoneId string, siteId string) (int32, error) {
-	// 1. 查询当前边缘站点可以容纳多少实例。
-	maxSiteInstances, err := mysql_service.QueryMaxSiteInstances(zoneId, siteId)
+	// 1. 查询当前边缘站点的容量。
+	siteCapacity, err := mysql_service.QuerySiteCapacity(zoneId, siteId)
 	if err != nil {
 		return -1, err
 	}
 	// 2. 查询目前有多少实例跑在边缘站点上。
-	siteInstances, err := mysql_service.QueryCurrentSiteInstances(zoneId, siteId, false)
+	siteUsingInstances, err := mysql_service.QueryUsingInstances(zoneId, siteId, "site")
 	if err != nil {
 		return -1, err
 	}
 	// 3. 查询目前有多少实例跑在中心站点上。
-	centerInstances, err := mysql_service.QueryCurrentSiteInstances(zoneId, siteId, true)
+	centerUsingInstances, err := mysql_service.QueryUsingInstances(zoneId, siteId, "center")
 	if err != nil {
 		return -1, err
 	}
 	// 4. 计算预计还缺少的资源的实例有多少。
-	unAllocateInstances := int32(maxPred - float64(siteInstances+centerInstances))
+	unAllocateInstances := int32(maxPred - float64(siteUsingInstances+centerUsingInstances))
 	// 5. 计算边缘站点还有多少容量可以利用。
-	capacitySiteInstances := maxSiteInstances - siteInstances
+	capacitySiteInstances := siteCapacity - siteUsingInstances
 	// 6. 只有当预测到实例增加，且边缘站点空闲实例数不足以支撑时，才需要额外的弹性实例。
 	if unAllocateInstances >= 0 && capacitySiteInstances < unAllocateInstances {
 		return int32(unAllocateInstances - capacitySiteInstances), nil
