@@ -2,7 +2,7 @@ package process
 
 import (
 	"fmt"
-	"predict/config"
+	"math"
 	"predict/manager"
 	"predict/mysql"
 	mysqlservice "predict/mysql/service"
@@ -13,18 +13,18 @@ import (
 )
 
 var (
-	TEnd           *time.Time = nil
-	TStart         *time.Time = nil
-	bounceInstance int32      = -1
-	layout                    = "2006-01-02 15:04:05"
+	TEnd          *time.Time = nil
+	TStart        *time.Time = nil
+	predInstances int32      = -1
+	layout                   = "2006-01-02 15:04:05"
 )
 
 func Process(zoneId string, siteList []string) error {
 	zoneMissing := int32(0)
+	zonePredInstance := float64(0)
 
 	latestTime := time.Date(2001, 1, 1, 0, 0, 0, 0, time.Local)
 	siteDateTrueInstanceMap := make(map[string]map[string]int32)
-	sitePredInstanceMap := make(map[string][]float64)
 
 	var wg sync.WaitGroup
 	var mu sync.Mutex
@@ -80,8 +80,13 @@ func Process(zoneId string, siteList []string) error {
 				fmt.Printf("%s-%s: predict failed, err:%v\n", zoneId, siteId, err)
 				panic(fmt.Sprintf("%s-%s: predict failed, err:%v\n", zoneId, siteId, err))
 			}
-			siteMissing, err := manager.CalculateMissingInstancesForSite(predResponse, zoneId, siteId)
-			sitePredInstanceMap[siteId] = predResponse.Pred
+
+			maxPred := math.SmallestNonzeroFloat64
+			for _, pred := range predResponse.Pred {
+				maxPred = math.Max(maxPred, pred)
+			}
+			siteMissing, err := manager.CalculateMissingInstancesForSite(maxPred, zoneId, siteId)
+			zonePredInstance += maxPred
 			if err != nil {
 				fmt.Printf("%s-%s: calc failed, err:%v\n", zoneId, siteId, err)
 				panic(fmt.Sprintf("%s-%s: calc failed, err:%v\n", zoneId, siteId, err))
@@ -92,6 +97,7 @@ func Process(zoneId string, siteList []string) error {
 		}(zoneId, siteId)
 	}
 	wg.Wait()
+	predInstances = int32(zonePredInstance)
 
 	dateInstanceMap := make(map[string]int32)
 	// 默认是 kv 零值。
@@ -136,7 +142,7 @@ func Process(zoneId string, siteList []string) error {
 		}
 		fmt.Printf("TODO: TStart: %s, TEnd: %s, timeStrings: %v \n", TStart.Format(layout), TEnd.Format(layout), timeStrings)
 		for _, timeString := range timeStrings {
-			err := mysqlservice.UpdateBounceRecord(zoneId, timeString, bounceInstance)
+			err := mysqlservice.UpdateBounceRecord(zoneId, timeString, predInstances)
 			if err != nil {
 				fmt.Printf("%s: update pred instance into bounce record failed, err: %v\n", zoneId, err)
 			}
@@ -144,14 +150,6 @@ func Process(zoneId string, siteList []string) error {
 	}
 	newStart := latestTime.Add(1 * time.Minute)
 	TStart = &newStart
-	var err error
-	bounceInstance, err = mysqlservice.QueryCenterInstances(zoneId)
-	bounceInstance += int32(config.SITETOTAL) * 2
-	// 加上边缘站点的个数。
-	if err != nil {
-		fmt.Printf("%s: query center instances failed, err:%v\n", zoneId, err)
-		panic(fmt.Sprintf("%s: query center instances failed, err:%v\n", zoneId, err))
-	}
 	if err := manager.Manage(zoneId, zoneMissing); err != nil {
 		fmt.Printf("Failed to apply or release instances in %s center: %v\n", zoneId, err)
 		return err

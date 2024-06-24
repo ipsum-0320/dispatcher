@@ -5,11 +5,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"math"
 	"net/http"
 	"predict/config"
 	mysql_service "predict/mysql/service"
-	"predict/timesnet"
 )
 
 func AbsInt(n int32) int32 {
@@ -19,32 +17,27 @@ func AbsInt(n int32) int32 {
 	return n
 }
 
-func CalculateMissingInstancesForSite(predResponse *timesnet.PredDataResponse, zoneId string, siteId string) (int32, error) {
-	// 1. 拿到预测值中的最大值。
-	maxPred := math.SmallestNonzeroFloat64
-	for _, pred := range predResponse.Pred {
-		maxPred = math.Max(maxPred, pred)
-	}
-	// 2.1. 查询当前边缘站点可以容纳多少实例。
+func CalculateMissingInstancesForSite(maxPred float64, zoneId string, siteId string) (int32, error) {
+	// 1. 查询当前边缘站点可以容纳多少实例。
 	maxSiteInstances, err := mysql_service.QueryMaxSiteInstances(zoneId, siteId)
 	if err != nil {
 		return -1, err
 	}
-	// 2.2. 查询目前有多少实例跑在边缘站点上。
+	// 2. 查询目前有多少实例跑在边缘站点上。
 	siteInstances, err := mysql_service.QueryCurrentSiteInstances(zoneId, siteId, false)
 	if err != nil {
 		return -1, err
 	}
-	// 2.3. 查询目前有多少实例跑在中心站点上。
+	// 3. 查询目前有多少实例跑在中心站点上。
 	centerInstances, err := mysql_service.QueryCurrentSiteInstances(zoneId, siteId, true)
 	if err != nil {
 		return -1, err
 	}
-	// 2.4. 计算预计还缺少的资源的实例有多少。
+	// 4. 计算预计还缺少的资源的实例有多少。
 	unAllocateInstances := int32(maxPred - float64(siteInstances+centerInstances))
-	// 2.5. 计算边缘站点还有多少容量可以利用。
+	// 5. 计算边缘站点还有多少容量可以利用。
 	capacitySiteInstances := maxSiteInstances - siteInstances
-	// 2.6. 只有当预测到实例增加，且边缘站点空闲实例数不足以支撑时，才需要额外的弹性实例。
+	// 6. 只有当预测到实例增加，且边缘站点空闲实例数不足以支撑时，才需要额外的弹性实例。
 	if unAllocateInstances >= 0 && capacitySiteInstances < unAllocateInstances {
 		return int32(unAllocateInstances - capacitySiteInstances), nil
 	}
