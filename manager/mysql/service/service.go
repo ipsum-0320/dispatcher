@@ -22,7 +22,7 @@ func InsertInstance(zoneId string, siteId string, serverIp string, instanceId st
 }
 
 func GetAndDeleteAvailableInstancesInCenter(zoneId string, num int32) ([]string, error) {
-	rows, err := mysql.DB.Query(fmt.Sprintf("SELECT pod_name FROM instance_%s WHERE is_elastic = 1 AND status = 'available' ORDER BY RAND() LIMIT %d", zoneId, num))
+	rows, err := mysql.DB.Query(fmt.Sprintf("SELECT pod_name FROM instance_%s WHERE is_elastic = 1 AND status = 'available' LIMIT %d", zoneId, num))
 	if err != nil {
 		return nil, err
 	}

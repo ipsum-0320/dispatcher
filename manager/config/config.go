@@ -18,6 +18,8 @@ var (
 	MYSQLDATABASE string // MYSQL服务数据库
 	SCALERATIO    int    // 缩放比例
 	HUADONGTOTAL  int    // 华东实例总数
+
+	CENTERMAXTOTAL = 240 // 弹性实例数量上限
 )
 
 func init() {

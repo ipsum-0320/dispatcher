@@ -34,12 +34,14 @@ type PredDataResponse struct {
 }
 
 func Predict(source PredDataSource, zoneId string, siteId string) (*PredDataResponse, error) {
+
 	// 数据扩大n倍，用于预测
+	var scaledPredDataSource = make(PredDataSource)
 	for date, value := range source {
-		source[date] = value * int32(config.SCALERATIO)
+		scaledPredDataSource[date] = value * int32(config.SCALERATIO)
 	}
 
-	csvPath, err := source2csv(source, zoneId, siteId)
+	csvPath, err := source2csv(scaledPredDataSource, zoneId, siteId)
 	if err != nil {
 		fmt.Println("Error converting source to CSV:", err)
 		return nil, err
