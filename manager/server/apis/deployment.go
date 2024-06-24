@@ -352,6 +352,7 @@ func checkInstanceStatus(zoneId string, host string, port int32, instanceName st
 }
 
 func apply(zoneId string, replica int32) error {
+	log.Printf("Trying to deploy %d pods in %s", replica, zoneId)
 	podList, err := k8s_client.TargetClient.CoreV1().Pods(config.K8SNAMSPACE).List(context.Background(), metav1.ListOptions{
 		LabelSelector: fmt.Sprintf("zone_id=%s, is_elastic=1", zoneId),
 	})
@@ -361,8 +362,6 @@ func apply(zoneId string, replica int32) error {
 	if len(podList.Items) >= config.CENTERMAXTOTAL {
 		return fmt.Errorf("the number of elastic instance in center is already full")
 	}
-
-	log.Printf("Trying to deploy %d pods in %s", replica, zoneId)
 	leftNumber := int32(config.CENTERMAXTOTAL) - int32(len(podList.Items))
 	if leftNumber < replica {
 		replica = leftNumber
