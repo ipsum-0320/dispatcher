@@ -2,6 +2,7 @@ package process
 
 import (
 	"fmt"
+	"log"
 	"math"
 	"predict/manager"
 	"predict/mysql"
@@ -55,7 +56,7 @@ func Process(zoneId string, siteList []string) error {
 					fmt.Printf("%s-%s: parse date failed: %v\n", zoneId, siteId, err)
 					panic(fmt.Sprintf("%s-%s: parse date failed: %v\n", zoneId, siteId, err))
 				}
-				fmt.Printf("latestTime: %v, dateTime: %v\n", latestTime, dateTime)
+				// fmt.Printf("latestTime: %v, dateTime: %v\n", latestTime, dateTime)
 				if latestTime.Before(dateTime) {
 					latestTime = dateTime
 				}
@@ -94,6 +95,7 @@ func Process(zoneId string, siteList []string) error {
 			zoneMissing += siteMissing
 			zonePredInstance += maxPred
 			mu.Unlock()
+			log.Printf("%s: %d pods needed totally", siteId, int32(maxPred))
 		}(zoneId, siteId)
 	}
 	wg.Wait()
@@ -139,7 +141,7 @@ func Process(zoneId string, siteList []string) error {
 			formattedTime := t.Format(layout)
 			timeStrings = append(timeStrings, formattedTime)
 		}
-		fmt.Printf("TODO: TStart: %s, TEnd: %s, timeStrings: %v \n", TStart.Format(layout), TEnd.Format(layout), timeStrings)
+		// fmt.Printf("TODO: TStart: %s, TEnd: %s, timeStrings: %v \n", TStart.Format(layout), TEnd.Format(layout), timeStrings)
 		for _, timeString := range timeStrings {
 			err := mysqlservice.UpdateBounceRecord(zoneId, timeString, bounceInstance)
 			if err != nil {
