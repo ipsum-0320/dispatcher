@@ -26,6 +26,7 @@ func Process(zoneId string, siteList []string) error {
 
 	latestTime := time.Date(2001, 1, 1, 0, 0, 0, 0, time.Local)
 	siteDateTrueInstanceMap := make(map[string]map[string]int32)
+	fmt.Printf("the address of siteDateTrueInstanceMap is %v", &siteDateTrueInstanceMap)
 
 	var wg sync.WaitGroup
 	var mu sync.Mutex
@@ -40,6 +41,7 @@ func Process(zoneId string, siteList []string) error {
 				panic(fmt.Sprintf("%s-%s, query date instance failed, err:%v\n", zoneId, siteId, err))
 			}
 			predMap := make(timesnet.PredDataSource)
+			fmt.Printf("the address of predMap is %v", &predMap)
 			for DateInstanceRows.Next() {
 				var (
 					siteId         string
@@ -100,6 +102,7 @@ func Process(zoneId string, siteList []string) error {
 
 			mu.Lock()
 			siteDateTrueInstanceMap[siteId] = predMap
+			fmt.Printf("%s-%s: siteDateTrueInstanceMap value is %v \n", zoneId, siteId, predMap)
 			zoneFixed += siteCapacity
 			zoneMissing += siteMissing
 			mu.Unlock()
