@@ -13,10 +13,9 @@ import (
 )
 
 var (
-	TEnd          *time.Time = nil
-	TStart        *time.Time = nil
-	predInstances int32      = -1
-	layout                   = "2006-01-02 15:04:05"
+	TEnd   *time.Time = nil
+	TStart *time.Time = nil
+	layout            = "2006-01-02 15:04:05"
 )
 
 func Process(zoneId string, siteList []string) error {
@@ -97,7 +96,6 @@ func Process(zoneId string, siteList []string) error {
 		}(zoneId, siteId)
 	}
 	wg.Wait()
-	predInstances = int32(zonePredInstance)
 
 	dateInstanceMap := make(map[string]int32)
 	// 默认是 kv 零值。
@@ -142,7 +140,7 @@ func Process(zoneId string, siteList []string) error {
 		}
 		fmt.Printf("TODO: TStart: %s, TEnd: %s, timeStrings: %v \n", TStart.Format(layout), TEnd.Format(layout), timeStrings)
 		for _, timeString := range timeStrings {
-			err := mysqlservice.UpdateBounceRecord(zoneId, timeString, predInstances)
+			err := mysqlservice.UpdateBounceRecord(zoneId, timeString, int32(zonePredInstance))
 			if err != nil {
 				fmt.Printf("%s: update pred instance into bounce record failed, err: %v\n", zoneId, err)
 			}
