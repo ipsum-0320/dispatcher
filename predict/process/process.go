@@ -14,15 +14,15 @@ import (
 )
 
 var (
-	TEnd           *time.Time = nil
-	TStart         *time.Time = nil
-	bounceInstance int32      = -1
-	layout                    = "2006-01-02 15:04:05"
+	TEnd              *time.Time = nil
+	TStart            *time.Time = nil
+	deployedInstances int32      = -1
+	layout                       = "2006-01-02 15:04:05"
 )
 
 func Process(zoneId string, siteList []string) error {
-	zoneMissing := int32(0)
-	zonePredInstance := float64(0)
+	zoneFixed := int32(0)   // 片区固定资源，即所有边缘站点固定资源总和
+	zoneMissing := int32(0) // 片区还需要的资源实例数，后续需要减掉可用弹性实例
 
 	latestTime := time.Date(2001, 1, 1, 0, 0, 0, 0, time.Local)
 	siteDateTrueInstanceMap := make(map[string]map[string]int32)
@@ -91,9 +91,16 @@ func Process(zoneId string, siteList []string) error {
 				fmt.Printf("%s-%s: calc failed, err:%v\n", zoneId, siteId, err)
 				panic(fmt.Sprintf("%s-%s: calc failed, err:%v\n", zoneId, siteId, err))
 			}
+
+			siteCapacity, err := mysqlservice.QuerySiteCapacity(zoneId, siteId)
+			if err != nil {
+				fmt.Printf("%s-%s: query site capacity failed, err:%v\n", zoneId, siteId, err)
+				panic(fmt.Sprintf("%s-%s: query site capacity failed, err:%v\n", zoneId, siteId, err))
+			}
+
 			mu.Lock()
+			zoneFixed += siteCapacity
 			zoneMissing += siteMissing
-			zonePredInstance += maxPred
 			mu.Unlock()
 			log.Printf("%s: %d pods needed totally", siteId, int32(maxPred))
 		}(zoneId, siteId)
@@ -143,15 +150,24 @@ func Process(zoneId string, siteList []string) error {
 		}
 		// fmt.Printf("TODO: TStart: %s, TEnd: %s, timeStrings: %v \n", TStart.Format(layout), TEnd.Format(layout), timeStrings)
 		for _, timeString := range timeStrings {
-			err := mysqlservice.UpdateBounceRecord(zoneId, timeString, bounceInstance)
+			err := mysqlservice.UpdateBounceRecord(zoneId, timeString, deployedInstances)
 			if err != nil {
 				fmt.Printf("%s: update pred instance into bounce record failed, err: %v\n", zoneId, err)
 			}
 		}
+	} else {
+		deployedInstances = zoneFixed
 	}
+
 	newStart := latestTime.Add(1 * time.Minute)
 	TStart = &newStart
-	bounceInstance = int32(zonePredInstance)
+
+	centerAvailableInstances, err := mysqlservice.QueryAvailableInstanceInCenter(zoneId)
+	if err != nil {
+		fmt.Printf("Failed to get available instances in %s center: %v\n", zoneId, err)
+		return err
+	}
+	deployedInstances += zoneMissing - centerAvailableInstances
 
 	if err := manager.Manage(zoneId, zoneMissing); err != nil {
 		fmt.Printf("Failed to apply or release instances in %s center: %v\n", zoneId, err)

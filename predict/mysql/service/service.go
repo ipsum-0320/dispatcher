@@ -181,3 +181,25 @@ func QueryCenterInstances(zoneId string) (int32, error) {
 	}
 	return count, nil
 }
+
+func QueryAvailableInstanceInCenter(zoneId string) (int32, error) {
+	rows, err := mysql.DB.Query(fmt.Sprintf("SELECT DISTINCT count(*) AS COUNT FROM instance_%s WHERE is_elastic = 1 AND status = 'available'", zoneId))
+	if err != nil {
+		fmt.Printf("%s: query current available instance failed, err: %v\n", zoneId, err)
+		return 0, err
+	}
+	defer func(query *sql.Rows) {
+		if err := query.Close(); err != nil {
+			fmt.Printf("%s: close current available instance failed, err: %v\n", zoneId, err)
+		}
+	}(rows)
+
+	var count int32
+	if rows.Next() {
+		if err := rows.Scan(&count); err != nil {
+			fmt.Printf("%s: scan current available instance failed, err: %v\n", zoneId, err)
+			return 0, err
+		}
+	}
+	return count, nil
+}
