@@ -217,7 +217,7 @@ func InstanceManage(w http.ResponseWriter, r *http.Request) {
 			Message:    "OK",
 			Data:       "All instances applied successfully",
 		}, http.StatusOK)
-		log.Printf("%s: %d instances applied successfully", reqBody.ZoneId, replica)
+		log.Printf("%s: All instances applied successfully", reqBody.ZoneId)
 
 	} else {
 		if err := release(reqBody.ZoneId, -replica); err != nil {
