@@ -2,7 +2,6 @@ package apis
 
 import (
 	"fmt"
-	"manager/config"
 	mysqlservice "manager/mysql/service"
 	"net/http"
 	"time"
@@ -17,8 +16,8 @@ func Healthz(w http.ResponseWriter, r *http.Request) {
 }
 
 type BounceRateResponse struct {
-	BingoRate float64 `json:"bingo_rate"`
-	SaveRate  float64 `json:"save_rate"`
+	TrueIns   []float64 `json:"true_ins"`
+	BounceIns []float64 `json:"bounce_ins"`
 }
 
 func BounceRate(w http.ResponseWriter, r *http.Request) {
@@ -62,25 +61,18 @@ func BounceRate(w http.ResponseWriter, r *http.Request) {
 		predTrueList = append(predTrueList, *predTrue)
 	}
 
-	bingoNum := 0
-	predSum := 0.0
-	total := float64(config.HUADONGTOTAL / config.SCALERATIO)
-
+	var TrueIns, BounceIns []float64
 	for _, pt := range predTrueList {
-		predSum += pt.Pred
-		if pt.Pred >= float64(pt.True) {
-			bingoNum++
-		}
+		TrueIns = append(TrueIns, float64(pt.True))
+		BounceIns = append(BounceIns, pt.Pred)
 	}
-	bingoRate := float64(bingoNum) / float64(len(predTrueList))
-	saveRate := 1 - ((predSum / float64(len(predTrueList))) / total)
 
 	SendHttpResponse(w, &Response{
 		StatusCode: 0,
 		Message:    "OK",
 		Data: BounceRateResponse{
-			BingoRate: bingoRate,
-			SaveRate:  saveRate,
+			TrueIns:   TrueIns,
+			BounceIns: BounceIns,
 		},
 	}, http.StatusOK)
 }
