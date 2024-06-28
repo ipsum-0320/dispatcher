@@ -23,7 +23,6 @@ var (
 	TIMESNETPORT      string // 算法服务端口
 	ACCELERATIONRATIO int    // 加速比例
 	SCALERATIO        int    // 缩放比例
-	SITETOTAL         int    // 宁波和杭州边缘固定实例数
 )
 
 func init() {
@@ -90,12 +89,5 @@ func init() {
 		log.Fatal("Failed to get instance scale ratio from env")
 	} else if SCALERATIO == 0 {
 		log.Fatal("Instance scale ratio cannot be zero")
-	}
-
-	SITETOTAL, err = strconv.Atoi(os.Getenv("SITE_TOTAL"))
-	if err != nil {
-		log.Fatal("Failed to get number of instances in huadong's site from env")
-	} else if SITETOTAL == 0 {
-		log.Fatal("Number of instances in huadong's site cannot be zero")
 	}
 }
