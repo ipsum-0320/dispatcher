@@ -167,18 +167,20 @@ func InstanceManage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 获取中心站点可用弹性实例之前刷新一遍实例状态
-	log.Println("Check started")
-	if err := ensureK8sDBConsistency(reqBody.ZoneId); err != nil {
-		log.Printf("Failed to synchronize instance status: %v", err)
-		SendErrorResponse(w, &ErrorCodeWithMessage{
-			HttpStatus: http.StatusInternalServerError,
-			ErrorCode:  500,
-			Message:    "Internal server error",
-		}, err.Error())
-		return
+	if config.CHECKINGSTATUS {
+		// 获取中心站点可用弹性实例之前刷新一遍实例状态
+		log.Println("Check started")
+		if err := ensureK8sDBConsistency(reqBody.ZoneId); err != nil {
+			log.Printf("Failed to synchronize instance status: %v", err)
+			SendErrorResponse(w, &ErrorCodeWithMessage{
+				HttpStatus: http.StatusInternalServerError,
+				ErrorCode:  500,
+				Message:    "Internal server error",
+			}, err.Error())
+			return
+		}
+		log.Println("Check ended")
 	}
-	log.Println("Check ended")
 
 	availableInstances, err := mysql_service.GetAvailableInstanceInCenter(reqBody.ZoneId)
 	if err != nil {
@@ -239,28 +241,22 @@ func InstanceManage(w http.ResponseWriter, r *http.Request) {
 }
 
 // 判断Pod是否处于Ready状态
-func isPodReady(pod *corev1.Pod) bool {
+func isPodReady(pod *corev1.Pod, nodePort int32) bool {
 	if pod.Status.Phase != corev1.PodRunning { // 必须先处于Runing状态才能判断是否Ready
 		return false
 	}
 
 	for _, cond := range pod.Status.Conditions {
 		if cond.Type == corev1.PodReady && cond.Status == corev1.ConditionTrue {
-			return true
+			if _, err := getInstanceStatus(pod.Status.HostIP, nodePort); err != nil {
+				// log.Printf("Warning: Although %s is ready, but the api is still not accessible: %v", pod.Name, err)
+				return false
+			} else {
+				return true
+			}
 		}
 	}
 	return false
-}
-
-// 过滤得到状态为Ready的实例
-func filterReadyPods(podList *corev1.PodList) []*corev1.Pod {
-	readyPods := make([]*corev1.Pod, 0)
-	for _, pod := range podList.Items {
-		if isPodReady(&pod) {
-			readyPods = append(readyPods, &pod)
-		}
-	}
-	return readyPods
 }
 
 func ensureK8sDBConsistency(zoneId string) error {
@@ -269,7 +265,6 @@ func ensureK8sDBConsistency(zoneId string) error {
 	podList, err := k8s_client.TargetClient.CoreV1().Pods(config.K8SNAMSPACE).List(context.Background(), metav1.ListOptions{
 		LabelSelector: podLabelSelector,
 	})
-	readyPods := filterReadyPods(podList)
 
 	if err != nil {
 		return fmt.Errorf("failed to get pod list from kubernetes when checking: %w", err)
@@ -282,10 +277,10 @@ func ensureK8sDBConsistency(zoneId string) error {
 	)
 
 	// 2. 遍历pod，确认和数据库状态一致
-	for _, pod := range readyPods {
+	for _, pod := range podList.Items {
 		wg.Add(1)
 		ch <- struct{}{}
-		go func(pod *corev1.Pod) {
+		go func(pod corev1.Pod) {
 			defer wg.Done()
 			defer func() { <-ch }()
 
@@ -322,33 +317,55 @@ func ensureK8sDBConsistency(zoneId string) error {
 	}
 	wg.Wait()
 
-	if int(count) != len(readyPods) {
-		log.Printf("There are %d ready instances in %s totally, and %d instances failed to synchronized", len(readyPods), zoneId, len(readyPods)-int(count))
+	total := int32(len(podList.Items))
+	if count != total {
+		log.Printf("There are %d ready instances in %s totally, and %d instances failed to synchronized", total, zoneId, total-count)
 	}
 	return nil
 }
 
 func checkInstanceStatus(zoneId string, host string, port int32, instanceName string) error {
-	url := fmt.Sprintf("http://%s:%d/getStatus", host, port)
-
-	resp, err := http.Get(url)
+	status, err := getInstanceStatus(host, port)
 	if err != nil {
-		return fmt.Errorf("error fetching status: %w", err)
+		return fmt.Errorf("failed to get instance status: %w", err)
 	}
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return fmt.Errorf("error reading response body: %w", err)
-	}
-
-	status := string(body)
-
 	if err := mysql_service.SynchronizeInstanceStatus(zoneId, instanceName, status); err != nil {
 		return fmt.Errorf("failed to synchronize instance status for %s: %w", instanceName, err)
 	}
-
 	return nil
+}
+
+func getInstanceStatus(host string, port int32) (string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	url := fmt.Sprintf("http://%s:%d/getStatus", host, port)
+
+	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	if err != nil {
+		return "", fmt.Errorf("error creating request: %w", err)
+	}
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("error with request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if ctx.Err() != nil {
+		if ctx.Err() == context.DeadlineExceeded {
+			return "", fmt.Errorf("request timed out")
+		} else {
+			return "", fmt.Errorf("request was canceled")
+		}
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("error reading response body: %w", err)
+	}
+	return string(body), nil
 }
 
 func apply(zoneId string, replica int32) error {
@@ -427,9 +444,9 @@ func apply(zoneId string, replica int32) error {
 				var err error
 				pod, err = k8s_client.TargetClient.CoreV1().Pods(config.K8SNAMSPACE).Get(ctx, podName, metav1.GetOptions{})
 				if err != nil {
-					return false, nil // 如果有错误发生，直接返回
+					return false, nil
 				}
-				return isPodReady(pod), nil // 如果 Pod 就绪，返回 true
+				return isPodReady(pod, nodePort), nil
 			})
 
 			if err != nil {
