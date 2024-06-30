@@ -118,8 +118,8 @@ type PredTrue struct {
 	Pred float64 `json:"pred"`
 }
 
-func GetBounceRecord(zoneId string, date string) (*PredTrue, error) {
-	rows, err := mysql.DB.Query(fmt.Sprintf("SELECT true_instances, pred_instances FROM bounce_%s WHERE date = '%s'", zoneId, date))
+func GetBounceRecords(zoneId string, start string, end string) ([]PredTrue, error) {
+	rows, err := mysql.DB.Query(fmt.Sprintf("SELECT true_instances, pred_instances FROM bounce_%s WHERE date > '%s' and date < '%s'", zoneId, start, end))
 	if err != nil {
 		return nil, err
 	}
@@ -127,14 +127,13 @@ func GetBounceRecord(zoneId string, date string) (*PredTrue, error) {
 
 	var trueIns int32
 	var predIns float64
-	if rows.Next() {
+
+	var predTrueList []PredTrue
+	for rows.Next() {
 		if err = rows.Scan(&trueIns, &predIns); err != nil {
 			return nil, err
 		}
+		predTrueList = append(predTrueList, PredTrue{True: trueIns, Pred: predIns})
 	}
-
-	return &PredTrue{
-		Pred: predIns,
-		True: trueIns,
-	}, nil
+	return predTrueList, nil
 }

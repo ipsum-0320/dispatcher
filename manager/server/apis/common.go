@@ -47,18 +47,14 @@ func BounceRate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var predTrueList []mysqlservice.PredTrue
-	for t := tStart; t.Before(tEnd) || t.Equal(tEnd); t = t.Add(time.Minute) {
-		predTrue, err := mysqlservice.GetBounceRecord("huadong", t.Format(layout))
-		if err != nil {
-			SendHttpResponse(w, &Response{
-				StatusCode: 500,
-				Message:    fmt.Sprintf("Get bounce record failed, err: %v", err),
-				Data:       nil,
-			}, http.StatusInternalServerError)
-			return
-		}
-		predTrueList = append(predTrueList, *predTrue)
+	predTrueList, err := mysqlservice.GetBounceRecords("huadong", tStart.Format(layout), tEnd.Format(layout))
+	if err != nil {
+		SendHttpResponse(w, &Response{
+			StatusCode: 500,
+			Message:    fmt.Sprintf("Get bounce record failed, err: %v", err),
+			Data:       nil,
+		}, http.StatusInternalServerError)
+		return
 	}
 
 	var TrueIns, BounceIns []float64
