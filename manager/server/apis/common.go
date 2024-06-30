@@ -16,6 +16,7 @@ func Healthz(w http.ResponseWriter, r *http.Request) {
 }
 
 type BounceRateResponse struct {
+	Date      []string  `json:"date"`
 	TrueIns   []float64 `json:"true_ins"`
 	BounceIns []float64 `json:"bounce_ins"`
 }
@@ -86,7 +87,9 @@ func BounceRate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var TrueIns, BounceIns []float64
+	var Date []string
 	for _, pt := range predTrueList {
+		Date = append(Date, pt.Date)
 		TrueIns = append(TrueIns, float64(pt.True))
 		BounceIns = append(BounceIns, pt.Pred)
 	}
@@ -97,6 +100,7 @@ func BounceRate(w http.ResponseWriter, r *http.Request) {
 		Data: BounceRateResponse{
 			TrueIns:   TrueIns,
 			BounceIns: BounceIns,
+			Date:      Date,
 		},
 	}, http.StatusOK)
 }

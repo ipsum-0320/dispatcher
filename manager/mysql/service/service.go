@@ -114,26 +114,28 @@ func updateInstanceStatus(zoneId string, instanceName string, status string) err
 }
 
 type PredTrue struct {
+	Date string  `json:"date"`
 	True int32   `json:"true"`
 	Pred float64 `json:"pred"`
 }
 
 func GetBounceRecords(zoneId string, start string, end string) ([]PredTrue, error) {
-	rows, err := mysql.DB.Query(fmt.Sprintf("SELECT true_instances, pred_instances FROM bounce_%s WHERE date > '%s' and date < '%s'", zoneId, start, end))
+	rows, err := mysql.DB.Query(fmt.Sprintf("SELECT `date`, true_instances, pred_instances FROM bounce_%s WHERE date > '%s' and date < '%s'", zoneId, start, end))
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 
+	var date string
 	var trueIns int32
 	var predIns float64
 
 	var predTrueList []PredTrue
 	for rows.Next() {
-		if err = rows.Scan(&trueIns, &predIns); err != nil {
+		if err = rows.Scan(&date, &trueIns, &predIns); err != nil {
 			return nil, err
 		}
-		predTrueList = append(predTrueList, PredTrue{True: trueIns, Pred: predIns})
+		predTrueList = append(predTrueList, PredTrue{Date: date, True: trueIns, Pred: predIns})
 	}
 	return predTrueList, nil
 }
