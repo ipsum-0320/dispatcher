@@ -47,6 +47,34 @@ func BounceRate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	isStartExist, err := mysqlservice.IsBounceRecordExist("huadong", tStart.Format(layout))
+	if err != nil {
+		SendHttpResponse(w, &Response{
+			StatusCode: 500,
+			Message:    fmt.Sprintf("check bounce record exist failed, err: %v", err),
+			Data:       nil,
+		}, http.StatusInternalServerError)
+		return
+	}
+	isEndExist, err := mysqlservice.IsBounceRecordExist("huadong", tEnd.Format(layout))
+	if err != nil {
+		SendHttpResponse(w, &Response{
+			StatusCode: 500,
+			Message:    fmt.Sprintf("check bounce record exist failed, err: %v", err),
+			Data:       nil,
+		}, http.StatusInternalServerError)
+		return
+	}
+
+	if !isStartExist || !isEndExist {
+		SendHttpResponse(w, &Response{
+			StatusCode: 400,
+			Message:    fmt.Sprintf("Invalid start or end time, %v or %v do not exist", tStart.Format(layout), tEnd.Format(layout)),
+			Data:       nil,
+		}, http.StatusBadRequest)
+		return
+	}
+
 	predTrueList, err := mysqlservice.GetBounceRecords("huadong", tStart.Format(layout), tEnd.Format(layout))
 	if err != nil {
 		SendHttpResponse(w, &Response{

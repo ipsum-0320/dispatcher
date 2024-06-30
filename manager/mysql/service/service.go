@@ -137,3 +137,17 @@ func GetBounceRecords(zoneId string, start string, end string) ([]PredTrue, erro
 	}
 	return predTrueList, nil
 }
+
+func IsBounceRecordExist(zoneId string, date string) (bool, error) {
+	rows, err := mysql.DB.Query(fmt.Sprintf("SELECT true_instances, pred_instances FROM bounce_%s WHERE date = '%s'", zoneId, date))
+	if err != nil {
+		return false, err
+	}
+	defer rows.Close()
+
+	if rows.Next() {
+		return true, nil
+	}
+
+	return false, nil
+}
