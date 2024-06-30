@@ -35,7 +35,7 @@ sleep 30
 
 # 3. restart predict
 kubectl apply -f predict.yaml
-sleep 30
+sleep 60
 
 # 4. restart fakeuser
 kubectl apply -f fakeuser.yaml
