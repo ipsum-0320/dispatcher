@@ -167,20 +167,18 @@ func InstanceManage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if config.CHECKINGSTATUS {
-		// 获取中心站点可用弹性实例之前刷新一遍实例状态
-		log.Println("Check started")
-		if err := ensureK8sDBConsistency(reqBody.ZoneId); err != nil {
-			log.Printf("Failed to synchronize instance status: %v", err)
-			SendErrorResponse(w, &ErrorCodeWithMessage{
-				HttpStatus: http.StatusInternalServerError,
-				ErrorCode:  500,
-				Message:    "Internal server error",
-			}, err.Error())
-			return
-		}
-		log.Println("Check ended")
+	// 获取中心站点可用弹性实例之前刷新一遍实例状态
+	log.Println("Check started")
+	if err := ensureK8sDBConsistency(reqBody.ZoneId); err != nil {
+		log.Printf("Failed to synchronize instance status: %v", err)
+		SendErrorResponse(w, &ErrorCodeWithMessage{
+			HttpStatus: http.StatusInternalServerError,
+			ErrorCode:  500,
+			Message:    "Internal server error",
+		}, err.Error())
+		return
 	}
+	log.Println("Check ended")
 
 	availableInstances, err := mysql_service.GetAvailableInstanceInCenter(reqBody.ZoneId)
 	if err != nil {

@@ -19,8 +19,7 @@ var (
 	SCALERATIO    int    // 缩放比例
 	HUADONGTOTAL  int    // 华东实例总数
 
-	CENTERMAXTOTAL = 240   // 弹性实例数量上限
-	CHECKINGSTATUS = false // 是否检查实例状态并同步到数据库
+	CENTERMAXTOTAL = 240 // 弹性实例数量上限
 )
 
 func init() {
