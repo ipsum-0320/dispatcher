@@ -1,134 +1,17 @@
 package apis
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"log"
 	"manager/config"
 	"net/http"
 	"sync"
-	"time"
 
-	"k8s.io/apimachinery/pkg/api/resource"
-	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/uuid"
-	"k8s.io/apimachinery/pkg/util/wait"
 
 	mysql_service "manager/mysql/service"
-
-	k8s_client "manager/k8s-client"
-
-	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
-
-func podFactory(
-	instanceId string,
-	podName string,
-	zoneId string,
-) *corev1.Pod {
-	return &corev1.Pod{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      podName,
-			Namespace: config.K8SNAMSPACE,
-			Labels: map[string]string{
-				"instance_id": instanceId,
-				"zone_id":     zoneId,
-				"is_elastic":  "1",
-			},
-		},
-		Spec: corev1.PodSpec{
-			Containers: []corev1.Container{
-				{
-					Name:            "cloudgame-container",
-					Image:           "cloudgame:latest",
-					ImagePullPolicy: corev1.PullIfNotPresent,
-					Ports: []corev1.ContainerPort{
-						{
-							Name:          "http",
-							ContainerPort: 8080,
-							Protocol:      corev1.ProtocolTCP,
-						},
-					},
-					Resources: corev1.ResourceRequirements{
-						Limits: corev1.ResourceList{
-							corev1.ResourceCPU:    resource.MustParse("50m"),
-							corev1.ResourceMemory: resource.MustParse("64Mi"),
-						},
-						Requests: corev1.ResourceList{
-							corev1.ResourceCPU:    resource.MustParse("25m"),
-							corev1.ResourceMemory: resource.MustParse("32Mi"),
-						},
-					},
-					ReadinessProbe: &corev1.Probe{
-						ProbeHandler: corev1.ProbeHandler{
-							HTTPGet: &corev1.HTTPGetAction{
-								Path: "/healthz",
-								Port: intstr.FromInt(8080),
-							},
-						},
-						InitialDelaySeconds: 15,
-						PeriodSeconds:       10,
-						TimeoutSeconds:      5,
-						SuccessThreshold:    1,
-						FailureThreshold:    3,
-					},
-				},
-			},
-			Affinity: &corev1.Affinity{
-				NodeAffinity: &corev1.NodeAffinity{
-					RequiredDuringSchedulingIgnoredDuringExecution: &corev1.NodeSelector{
-						NodeSelectorTerms: []corev1.NodeSelectorTerm{
-							{
-								MatchExpressions: []corev1.NodeSelectorRequirement{
-									{
-										Key:      "zone_id",
-										Operator: corev1.NodeSelectorOpIn,
-										Values:   []string{zoneId},
-									},
-									{
-										Key:      "role",
-										Operator: corev1.NodeSelectorOpIn,
-										Values:   []string{"center"},
-									},
-								},
-							},
-						},
-					},
-				},
-			},
-			RestartPolicy: corev1.RestartPolicyAlways,
-		},
-	}
-}
-
-func serviceFactory(
-	serviceName string,
-	instanceId string,
-) *corev1.Service {
-	return &corev1.Service{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      serviceName,
-			Namespace: config.K8SNAMSPACE,
-		},
-		Spec: corev1.ServiceSpec{
-			Selector: map[string]string{
-				"instance_id": instanceId,
-			},
-			Type: corev1.ServiceTypeNodePort,
-			Ports: []corev1.ServicePort{
-				{
-					Name:       "http",
-					Port:       80,
-					TargetPort: intstr.IntOrString{IntVal: 8080},
-					Protocol:   corev1.ProtocolTCP,
-				},
-			},
-		},
-	}
-}
 
 type InstanceManageRequest struct {
 	ZoneId  string `json:"zone_id"`
@@ -238,146 +121,16 @@ func InstanceManage(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// 判断Pod是否处于Ready状态
-func isPodReady(pod *corev1.Pod, nodePort int32) bool {
-	if pod.Status.Phase != corev1.PodRunning { // 必须先处于Runing状态才能判断是否Ready
-		return false
-	}
-
-	for _, cond := range pod.Status.Conditions {
-		if cond.Type == corev1.PodReady && cond.Status == corev1.ConditionTrue {
-			if _, err := getInstanceStatus(pod.Status.HostIP, nodePort); err != nil {
-				// log.Printf("Warning: Although %s is ready, but the api is still not accessible: %v", pod.Name, err)
-				return false
-			} else {
-				return true
-			}
-		}
-	}
-	return false
-}
-
-func ensureK8sDBConsistency(zoneId string) error {
-	// 1. 从集群中获取对应zone下的实例
-	podLabelSelector := fmt.Sprintf("zone_id=%s", zoneId)
-	podList, err := k8s_client.TargetClient.CoreV1().Pods(config.K8SNAMSPACE).List(context.Background(), metav1.ListOptions{
-		LabelSelector: podLabelSelector,
-	})
-
-	if err != nil {
-		return fmt.Errorf("failed to get pod list from kubernetes when checking: %w", err)
-	}
-	var (
-		wg    sync.WaitGroup
-		mu    sync.Mutex
-		count = int32(0)
-		ch    = make(chan struct{}, 50)
-	)
-
-	// 2. 遍历pod，确认和数据库状态一致
-	for _, pod := range podList.Items {
-		wg.Add(1)
-		ch <- struct{}{}
-		go func(pod corev1.Pod) {
-			defer wg.Done()
-			defer func() { <-ch }()
-
-			instanceName := fmt.Sprintf("instance-%s", pod.Name)
-			serviceName := fmt.Sprintf("service-%s", pod.Name)
-			nodePort := int32(0)
-
-			// 从service获取port
-			service, err := k8s_client.TargetClient.CoreV1().Services(config.K8SNAMSPACE).Get(context.Background(), serviceName, metav1.GetOptions{})
-			if err != nil {
-				log.Printf("Failed to get service when checking: %v", err)
-				return
-			}
-			for _, port := range service.Spec.Ports {
-				if port.NodePort != 0 {
-					nodePort = port.NodePort
-					break
-				}
-			}
-			if nodePort == 0 {
-				log.Printf("Failed to get port of %s when checking", service)
-				return
-			}
-
-			if err := checkInstanceStatus(zoneId, pod.Status.HostIP, nodePort, instanceName); err != nil {
-				log.Printf("Failed to check instance status: %v", err)
-				return
-			}
-
-			mu.Lock()
-			count++
-			mu.Unlock()
-		}(pod)
-	}
-	wg.Wait()
-
-	total := int32(len(podList.Items))
-	if count != total {
-		log.Printf("There are %d ready instances in %s totally, and %d instances failed to synchronized", total, zoneId, total-count)
-	}
-	return nil
-}
-
-func checkInstanceStatus(zoneId string, host string, port int32, instanceName string) error {
-	status, err := getInstanceStatus(host, port)
-	if err != nil {
-		return fmt.Errorf("failed to get instance status: %w", err)
-	}
-	if err := mysql_service.SynchronizeInstanceStatus(zoneId, instanceName, status); err != nil {
-		return fmt.Errorf("failed to synchronize instance status for %s: %w", instanceName, err)
-	}
-	return nil
-}
-
-func getInstanceStatus(host string, port int32) (string, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-	defer cancel()
-
-	url := fmt.Sprintf("http://%s:%d/getStatus", host, port)
-
-	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
-	if err != nil {
-		return "", fmt.Errorf("error creating request: %w", err)
-	}
-
-	client := &http.Client{}
-	resp, err := client.Do(req)
-	if err != nil {
-		return "", fmt.Errorf("error with request: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if ctx.Err() != nil {
-		if ctx.Err() == context.DeadlineExceeded {
-			return "", fmt.Errorf("request timed out")
-		} else {
-			return "", fmt.Errorf("request was canceled")
-		}
-	}
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return "", fmt.Errorf("error reading response body: %w", err)
-	}
-	return string(body), nil
-}
-
 func apply(zoneId string, replica int32) error {
 	log.Printf("Trying to deploy %d pods in %s", replica, zoneId)
-	podList, err := k8s_client.TargetClient.CoreV1().Pods(config.K8SNAMSPACE).List(context.Background(), metav1.ListOptions{
-		LabelSelector: fmt.Sprintf("zone_id=%s, is_elastic=1", zoneId),
-	})
+	currentInstancesNumber, err := queryCurrentInstanesInCenter(zoneId)
 	if err != nil {
-		return fmt.Errorf("failed to list pods :%v", err)
+		return fmt.Errorf("error quering current instances in zone %s: %w", zoneId, err)
 	}
-	if len(podList.Items) >= config.CENTERMAXTOTAL {
-		return fmt.Errorf("the number of elastic instance in center is already full")
+	if currentInstancesNumber >= config.CENTERMAXTOTAL {
+		return fmt.Errorf("the number of elastic instance in zone %s is already full", zoneId)
 	}
-	leftNumber := int32(config.CENTERMAXTOTAL) - int32(len(podList.Items))
+	leftNumber := int32(config.CENTERMAXTOTAL) - int32(currentInstancesNumber)
 	if leftNumber < replica {
 		replica = leftNumber
 		log.Printf("But the left space can only deploy %d pods in %s", replica, zoneId)
@@ -398,72 +151,16 @@ func apply(zoneId string, replica int32) error {
 
 			randomId := uuid.NewUUID()
 			podName := fmt.Sprintf("cloudgame-center-%s", randomId)
-			serviceName := fmt.Sprintf("service-%s", podName)
 			instanceId := fmt.Sprintf("instance-%s", podName)
 
-			// 部署Pod和Service
-			pod := podFactory(instanceId, podName, zoneId)
-			if _, err := k8s_client.TargetClient.CoreV1().Pods(config.K8SNAMSPACE).Create(context.Background(), pod, metav1.CreateOptions{}); err != nil {
-				log.Printf("Failed to create pod when applying: %v", err)
-				return
-			}
-			service := serviceFactory(serviceName, instanceId)
-			if _, err := k8s_client.TargetClient.CoreV1().Services(config.K8SNAMSPACE).Create(context.Background(), service, metav1.CreateOptions{}); err != nil {
-				log.Printf("Failed to create service when applying: %v", err)
-				return
-			}
-
-			// 获取服务端口
-			var nodePort int32
-			for nodePort == 0 {
-				service, err := k8s_client.TargetClient.CoreV1().Services(config.K8SNAMSPACE).Get(context.Background(), serviceName, metav1.GetOptions{})
-				if err != nil {
-					log.Printf("Failed to get service when applying: %v", err)
-					return
-				}
-				for _, port := range service.Spec.Ports {
-					if port.NodePort != 0 {
-						nodePort = port.NodePort
-						break
-					}
-				}
-			}
-
-			// 循环等待直到Pod部署完成
-			var (
-				pollInterval    = 2 * time.Second // 轮询间隔
-				timeoutDuration = 4 * time.Minute // 超时时长
-			)
-
-			ctx, cancel := context.WithTimeout(context.Background(), timeoutDuration)
-			defer cancel()
-
-			err := wait.PollUntilContextTimeout(ctx, pollInterval, timeoutDuration, true, func(ctx context.Context) (bool, error) {
-				var err error
-				pod, err = k8s_client.TargetClient.CoreV1().Pods(config.K8SNAMSPACE).Get(ctx, podName, metav1.GetOptions{})
-				if err != nil {
-					return false, nil
-				}
-				return isPodReady(pod, nodePort), nil
-			})
-
+			serverIp, port, err := createAndWatchPod(podName, instanceId, zoneId)
 			if err != nil {
-				log.Printf("Timed out waiting for %s in %s to be ready, starting cleanup...", podName, zoneId)
-				// 超时的话删除该Pod和Service避免影响K8S集群
-				if err := k8s_client.TargetClient.CoreV1().Pods(config.K8SNAMSPACE).Delete(context.Background(), podName, metav1.DeleteOptions{
-					GracePeriodSeconds: func() *int64 { t := int64(0); return &t }(),
-				}); err != nil {
-					log.Printf("Failed to delete pod %s in namesapce %s when applying: %v", podName, config.K8SNAMSPACE, err)
-				}
-				if err := k8s_client.TargetClient.CoreV1().Services(config.K8SNAMSPACE).Delete(context.Background(), serviceName, metav1.DeleteOptions{}); err != nil {
-					log.Printf("Failed to delete service %s in namesapce %s when applying: %v", serviceName, config.K8SNAMSPACE, err)
-				}
+				log.Printf("Failed to create and watch Pod: %v", err)
 				return
 			}
 
 			// 部署完成后才能保存实例到数据库
-			err = mysql_service.InsertInstance(zoneId, "null", pod.Status.HostIP, instanceId, podName, int(nodePort), 1, "available", "null")
-			if err != nil {
+			if err = mysql_service.InsertInstance(zoneId, "null", serverIp, instanceId, podName, port, 1, "available", "null"); err != nil {
 				log.Printf("Failed to insert instance into database  when applying: %v", err)
 				return
 			}
@@ -503,26 +200,16 @@ func release(zoneId string, replica int32) error {
 		go func(podName string) {
 			defer wg.Done()
 
-			var ok = true
-			if err := k8s_client.TargetClient.CoreV1().Pods(config.K8SNAMSPACE).Delete(context.Background(), podName, metav1.DeleteOptions{
-				GracePeriodSeconds: func() *int64 { t := int64(0); return &t }(),
-			}); err != nil {
-				log.Printf("Failed to delete pod %s in namesapce %s when releasing: %v", podName, config.K8SNAMSPACE, err)
-				ok = false
-			}
-
 			serviceName := fmt.Sprintf("service-%s", podName)
-			if err := k8s_client.TargetClient.CoreV1().Services(config.K8SNAMSPACE).Delete(context.Background(), serviceName, metav1.DeleteOptions{}); err != nil {
-				log.Printf("Failed to delete service %s in namesapce %s when releasing: %v", serviceName, config.K8SNAMSPACE, err)
-				ok = false
+			err := deletePodAndService(podName, serviceName)
+			if err != nil {
+				log.Printf("Failed to release pod %s: %v", podName, err)
+				return
 			}
 
-			if ok {
-				mu.Lock()
-				count++
-				mu.Unlock()
-			}
-
+			mu.Lock()
+			count++
+			mu.Unlock()
 		}(podName)
 	}
 

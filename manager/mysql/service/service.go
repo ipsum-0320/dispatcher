@@ -7,7 +7,7 @@ import (
 	"manager/mysql"
 )
 
-func InsertInstance(zoneId string, siteId string, serverIp string, instanceId string, podName string, port int, is_elastic int, status string, device_id string) error {
+func InsertInstance(zoneId string, siteId string, serverIp string, instanceId string, podName string, port int32, is_elastic int, status string, device_id string) error {
 	query := fmt.Sprintf("INSERT INTO instance_%s (site_id, server_ip, instance_id, pod_name, port, is_elastic, status, device_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)", zoneId)
 	stmt, err := mysql.DB.Prepare(query)
 	if err != nil {
