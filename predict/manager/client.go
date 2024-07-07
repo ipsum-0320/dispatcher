@@ -36,10 +36,10 @@ func CalculateMissingInstancesForSite(maxPred float64, zoneId string, siteId str
 	// 4. 计算预计还缺少的资源的实例有多少。
 	unAllocateInstances := int32(maxPred - float64(siteUsingInstances+centerUsingInstances))
 	// 5. 计算边缘站点还有多少容量可以利用。
-	capacitySiteInstances := siteCapacity - siteUsingInstances
+	siteAvailableInstances := siteCapacity - siteUsingInstances
 	// 6. 只有当预测到实例增加，且边缘站点空闲实例数不足以支撑时，才需要额外的弹性实例。
-	if unAllocateInstances >= 0 && capacitySiteInstances < unAllocateInstances {
-		return int32(unAllocateInstances - capacitySiteInstances), nil
+	if unAllocateInstances >= 0 && siteAvailableInstances < unAllocateInstances {
+		return int32(unAllocateInstances - siteAvailableInstances), nil
 	}
 
 	return 0, nil
