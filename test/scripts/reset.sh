@@ -3,14 +3,17 @@
 pre_record="2024-05-15 21:00:00"
 start_time="2024-05-16 00:00:00"
 scale_ratio="6"
-acceleration_ratio="3"
+acceleration_ratio="5"
 
 # 0. edit test-config 
+# 使用kubectl patch命令修改ConfigMap
 kubectl patch configmap test-config \
-  -p="{\"data\":{\"START_TIME\":\"${start_time}\", \"SCALE_RATIO\":\"${scale_ratio}\", \"ACCELERATION_RATIO\":\"${acceleration_ratio}\"}}"
+  -p="{\"data\":{\"START_TIME\":\"${start_time}\", 
+                 \"ACCELERATION_RATIO\":\"${acceleration_ratio}\",
+                 \"SCALE_RATIO\":\"${scale_ratio}\"}}"
 
 # 1. stop fakeuser, predict and usercenter module
-cd ~/dispatcher/deploys/deployments/
+cd ~/cloudgame/deploys/deployments/
 kubectl delete -f fakeuser.yaml
 kubectl delete -f predict.yaml
 kubectl delete -f usercenter.yaml
@@ -28,13 +31,13 @@ kubectl exec -it mysql -- mysql -uroot -p'cloudgame' -e "use cloudgame; delete f
 kubectl exec -it mysql -- mysql -uroot -p'cloudgame' -e "use cloudgame; delete from bounce_huadong;"
 
 # 3. disconnect all instances
-cd ~/dispatcher/test/
-./DisconnectAllInstances
+cd ~/cloudgame/dispatcher/test/
+go run main.go
 
 # 4. call manager api to release elastic instances
 curl -X POST http://localhost:31365/instance/manage -d '{"zone_id":"huadong","missing":0}'
 
 # 5. stop manager
-cd ~/dispatcher/deploys/deployments/
+cd ~/cloudgame/deploys/deployments/
 kubectl delete -f manager.yaml
 

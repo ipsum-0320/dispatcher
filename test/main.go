@@ -6,6 +6,8 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"path/filepath"
+	"runtime"
 	"sync"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -84,7 +86,7 @@ func sendDisConnectRequest(host string, port int) error {
 }
 
 func main() {
-	config, err := clientcmd.BuildConfigFromFlags("", "k8s.config")
+	config, err := clientcmd.BuildConfigFromFlags("", filepath.Join(getProjectRoot(), "..", "config", "kubeconfig"))
 	if err != nil {
 		log.Fatalf("Error creating local Kubernetes config: %v", err)
 	}
@@ -96,4 +98,9 @@ func main() {
 	}
 
 	DisconnectAllInstances()
+}
+
+func getProjectRoot() string {
+	_, filename, _, _ := runtime.Caller(0)
+	return filename
 }

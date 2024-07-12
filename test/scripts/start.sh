@@ -6,29 +6,29 @@ if [ "$1" == "true" ]; then
     docker rmi dispatcher-manager dispatcher-predict dispatcher-usercenter dispatcher-fakeuser
 
     # 1.2 package new images
-    cd ~/dispatcher/manager/
+    cd ~/cloudgame/dispatcher/manager/
     rm -rf manager
     go build -o manager main.go
     docker build -t dispatcher-manager .
 
-    cd ~/dispatcher/predict/
+    cd ~/cloudgame/dispatcher/predict/
     rm -rf predict
     go build -o predict main.go
     docker build -t dispatcher-predict .
 
-    cd ~/dispatcher/usercenter/
+    cd ~/cloudgame/dispatcher/usercenter/
     rm -rf usercenter
     go build -o usercenter main.go
     docker build -t dispatcher-usercenter .
 
-    cd ~/dispatcher/fakeuser/
+    cd ~/cloudgame/fakeuser/
     rm -rf fakeuser
     go build -o fakeuser main.go
     docker build -t dispatcher-fakeuser .
 fi
 
 # 2. restart manager, usercenter
-cd ~/dispatcher/deploys/deployments/
+cd ~/cloudgame/deploys/deployments/
 kubectl apply -f manager.yaml
 kubectl apply -f usercenter.yaml
 sleep 30
