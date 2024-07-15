@@ -20,23 +20,17 @@ func GetInstanceAndLogin(zoneID string, siteID string, deviceID string) (*model.
 
 	instance := &model.Instance{ZoneID: zoneID}
 
-	tx, err := database.DB.Begin()
-	if err != nil {
-		return nil, err
-	}
-
 	var isElastic = false
 	siteQuery := fmt.Sprintf(`SELECT * FROM instance_%s WHERE site_id = ? AND is_elastic = 0 AND status = 'available' LIMIT 1`, zoneID)
 	// 先查询边缘是否有可用实例
-	err = tx.QueryRow(siteQuery, siteID).Scan(&instance.SiteID, &instance.ServerIP, &instance.InstanceID, &instance.PodName, &instance.Port, &instance.IsElastic, &instance.Status, &instance.DeviceId)
+	err := database.DB.QueryRow(siteQuery, siteID).Scan(&instance.SiteID, &instance.ServerIP, &instance.InstanceID, &instance.PodName, &instance.Port, &instance.IsElastic, &instance.Status, &instance.DeviceId)
 	if err == sql.ErrNoRows { // 如果边缘没有的可用实例，再获取中心的可用实例
 		isElastic = true
 		centerQuery := fmt.Sprintf(`SELECT * FROM instance_%s WHERE is_elastic = 1 AND status = 'available' LIMIT 1`, zoneID)
-		err = tx.QueryRow(centerQuery).Scan(&instance.SiteID, &instance.ServerIP, &instance.InstanceID, &instance.PodName, &instance.Port, &instance.IsElastic, &instance.Status, &instance.DeviceId)
+		err = database.DB.QueryRow(centerQuery).Scan(&instance.SiteID, &instance.ServerIP, &instance.InstanceID, &instance.PodName, &instance.Port, &instance.IsElastic, &instance.Status, &instance.DeviceId)
 	}
 
 	if err != nil {
-		tx.Rollback()
 		if err == sql.ErrNoRows {
 			return nil, fmt.Errorf("no available instance found for device %s", deviceID)
 		} else {
@@ -47,19 +41,14 @@ func GetInstanceAndLogin(zoneID string, siteID string, deviceID string) (*model.
 	var updateStmt string
 	if isElastic { // 如果是弹性实例，则需要修改site_id
 		updateStmt = fmt.Sprintf(`UPDATE instance_%s SET site_id = ?, status = "using", device_id = ? WHERE instance_id = ?`, instance.ZoneID)
-		_, err = tx.Exec(updateStmt, instance.SiteID, deviceID, instance.InstanceID)
+		_, err = database.DB.Exec(updateStmt, instance.SiteID, deviceID, instance.InstanceID)
 	} else {
 		updateStmt = fmt.Sprintf(`UPDATE instance_%s SET status = "using", device_id = ? WHERE instance_id = ?`, instance.ZoneID)
-		_, err = tx.Exec(updateStmt, deviceID, instance.InstanceID)
+		_, err = database.DB.Exec(updateStmt, deviceID, instance.InstanceID)
 	}
 
 	if err != nil {
 		return nil, fmt.Errorf("error updating instance status: %w", err)
-	}
-
-	err = tx.Commit()
-	if err != nil {
-		return nil, fmt.Errorf("error commiting transaction: %w", err)
 	}
 
 	instance.Status = "using"
