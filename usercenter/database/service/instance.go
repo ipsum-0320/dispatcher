@@ -43,24 +43,24 @@ func GetInstanceAndLogin(zoneID string, siteID string, deviceID string) (*model.
 }
 
 // 根据终端id更新实例信息，登出设备
-func LogoutDevice(ZoneID string, deviceID string) error {
+func LogoutDevice(zoneID string, deviceID string) error {
 	isElastic := -1 // 初始值，避免未使用的错误
 
-	err := database.DB.QueryRow(fmt.Sprintf(`SELECT is_elastic FROM instance_%s WHERE device_id = ? LIMIT 1`, ZoneID), deviceID).Scan(&isElastic)
+	err := database.DB.QueryRow(fmt.Sprintf(`SELECT is_elastic FROM instance_%s WHERE device_id = ? LIMIT 1`, zoneID), deviceID).Scan(&isElastic)
 	if err != nil {
-		return fmt.Errorf("%s cannot be found in %s table: %v", deviceID, ZoneID, err)
+		return fmt.Errorf("%s cannot be found in %s table: %v", deviceID, zoneID, err)
 	}
 
 	var updateStmt string
 	if isElastic == 1 { // 如果是弹性实例就需要修改site_id为null
-		updateStmt = fmt.Sprintf(`UPDATE instance_%s SET site_id = 'null', status = 'available', device_id = 'null' WHERE device_id = ?`, ZoneID)
+		updateStmt = fmt.Sprintf(`UPDATE instance_%s SET site_id = 'null', status = 'available', device_id = 'null' WHERE device_id = ?`, zoneID)
 	} else { // 否则就不需要
-		updateStmt = fmt.Sprintf(`UPDATE instance_%s SET status = 'available', device_id = 'null' WHERE device_id = ?`, ZoneID)
+		updateStmt = fmt.Sprintf(`UPDATE instance_%s SET status = 'available', device_id = 'null' WHERE device_id = ?`, zoneID)
 	}
 
 	_, err = database.DB.Exec(updateStmt, deviceID)
 	if err != nil {
-		return fmt.Errorf("failed to update instance information when %s logged out from %s: %v", deviceID, ZoneID, err)
+		return fmt.Errorf("failed to update instance information when %s logged out from %s: %v", deviceID, zoneID, err)
 	}
 	return nil
 }
@@ -78,22 +78,22 @@ func GetZoneListInDB() (map[string][]string, error) {
 		if err := rows.Scan(&tableName); err != nil {
 			return nil, err
 		}
-		ZoneID := strings.TrimPrefix(tableName, "instance_")
+		zoneID := strings.TrimPrefix(tableName, "instance_")
 
-		sites, err := GetSiteListInZone(ZoneID)
+		sites, err := GetSiteListInZone(zoneID)
 		if err != nil {
 			log.Printf("Error getting unique site IDs for %s: %v", tableName, err)
 			continue
 		}
-		zoneList[ZoneID] = sites
+		zoneList[zoneID] = sites
 	}
 
 	fmt.Println(zoneList)
 	return zoneList, nil
 }
 
-func GetSiteListInZone(ZoneID string) ([]string, error) {
-	rows, err := database.DB.Query(fmt.Sprintf("SELECT DISTINCT site_id FROM instance_%s", ZoneID))
+func GetSiteListInZone(zoneID string) ([]string, error) {
+	rows, err := database.DB.Query(fmt.Sprintf("SELECT DISTINCT site_id FROM instance_%s", zoneID))
 	if err != nil {
 		return nil, err
 	}
@@ -114,11 +114,11 @@ func GetSiteListInZone(ZoneID string) ([]string, error) {
 	return siteList, nil
 }
 
-func getAvailableInstanceFromSite(ZoneID string, siteID string) (*model.Instance, error) {
-	instance := &model.Instance{ZoneID: ZoneID}
+func getAvailableInstanceFromSite(zoneID string, siteID string) (*model.Instance, error) {
+	instance := &model.Instance{ZoneID: zoneID}
 
 	query := `SELECT * FROM instance_%s WHERE site_id = ? AND is_elastic = 0 AND status = 'available' LIMIT 1`
-	stmt, err := database.DB.Prepare(fmt.Sprintf(query, ZoneID))
+	stmt, err := database.DB.Prepare(fmt.Sprintf(query, zoneID))
 	if err != nil {
 		return nil, err
 	}
