@@ -54,18 +54,19 @@ func DeviceLogin(w http.ResponseWriter, r *http.Request) {
 // 根据表单数据将终端登出，修改 instance 为可用
 func DeviceLogout(w http.ResponseWriter, r *http.Request) {
 	zoneID := r.PostFormValue("zone_id")
+	siteID := r.PostFormValue("site_id")
 	deviceID := r.PostFormValue("device_id")
 
-	if zoneID == "" || deviceID == "" {
+	if zoneID == "" || siteID == "" || deviceID == "" {
 		SendErrorResponse(w, &ErrorCodeWithMessage{
 			HttpStatus: http.StatusBadRequest,
 			ErrorCode:  400,
 			Message:    "Bad request",
-		}, "Zone_id or device_id not specified")
+		}, "Zone_id, site_id or device_id not specified")
 		return
 	}
 
-	err := service.LogoutDevice(zoneID, deviceID)
+	err := service.LogoutDevice(zoneID, siteID, deviceID)
 	if err != nil {
 		log.Printf("Failed to logout: %v", err)
 		SendErrorResponse(w, &ErrorCodeWithMessage{

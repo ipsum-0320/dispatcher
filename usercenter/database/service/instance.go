@@ -43,22 +43,23 @@ func GetInstanceAndLogin(zoneID string, siteID string, deviceID string) (*model.
 }
 
 // 根据终端id更新实例信息，登出设备
-func LogoutDevice(zoneID string, deviceID string) error {
+func LogoutDevice(zoneID string, siteID string, deviceID string) error {
 	isElastic := -1 // 初始值，避免未使用的错误
+	instanceID := ""
 
-	err := database.DB.QueryRow(fmt.Sprintf(`SELECT is_elastic FROM instance_%s WHERE device_id = ? LIMIT 1`, zoneID), deviceID).Scan(&isElastic)
+	err := database.DB.QueryRow(fmt.Sprintf(`SELECT instance_id, is_elastic FROM instance_%s WHERE site_id = ? AND device_id = ? LIMIT 1`, zoneID), siteID, deviceID).Scan(&instanceID, &isElastic)
 	if err != nil {
 		return fmt.Errorf("%s cannot be found in %s table: %v", deviceID, zoneID, err)
 	}
 
 	var updateStmt string
 	if isElastic == 1 { // 如果是弹性实例就需要修改site_id为null
-		updateStmt = fmt.Sprintf(`UPDATE instance_%s SET site_id = 'null', status = 'available', device_id = 'null' WHERE device_id = ?`, zoneID)
+		updateStmt = fmt.Sprintf(`UPDATE instance_%s SET site_id = 'null', status = 'available', device_id = 'null' WHERE instance_id = ?`, zoneID)
 	} else { // 否则就不需要
-		updateStmt = fmt.Sprintf(`UPDATE instance_%s SET status = 'available', device_id = 'null' WHERE device_id = ?`, zoneID)
+		updateStmt = fmt.Sprintf(`UPDATE instance_%s SET status = 'available', device_id = 'null' WHERE instance_id = ?`, zoneID)
 	}
 
-	_, err = database.DB.Exec(updateStmt, deviceID)
+	_, err = database.DB.Exec(updateStmt, instanceID)
 	if err != nil {
 		return fmt.Errorf("failed to update instance information when %s logged out from %s: %v", deviceID, zoneID, err)
 	}
