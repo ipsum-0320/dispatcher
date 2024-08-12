@@ -127,10 +127,10 @@ func apply(zoneId string, replica int32) error {
 	if err != nil {
 		return fmt.Errorf("error quering current instances in zone %s: %w", zoneId, err)
 	}
-	if currentInstancesNumber >= config.CENTERMAXTOTAL {
+	if currentInstancesNumber >= config.CENTERCAPACITY {
 		return fmt.Errorf("the number of elastic instance in zone %s is already full", zoneId)
 	}
-	leftNumber := int32(config.CENTERMAXTOTAL) - int32(currentInstancesNumber)
+	leftNumber := int32(config.CENTERCAPACITY) - int32(currentInstancesNumber)
 	if leftNumber < replica {
 		replica = leftNumber
 		log.Printf("But the left space can only deploy %d pods in %s", replica, zoneId)

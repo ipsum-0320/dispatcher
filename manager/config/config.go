@@ -9,17 +9,16 @@ import (
 var (
 	MANAGERPORT = "6666" // 资源管理模块服务端口
 
-	K8SNAMSPACE   string // K8S命名空间
-	K8SCONFIGPATH string // K8S配置文件地址
-	MYSQLHOST     string // MYSQL服务地址
-	MYSQLPORT     string // MYSQL服务端口
-	MYSQLUSER     string // MYSQL服务用户
-	MYSQLPASSWORD string // MYSQL服务密码
-	MYSQLDATABASE string // MYSQL服务数据库
-	SCALERATIO    int    // 缩放比例
-	HUADONGTOTAL  int    // 华东实例总数
-
-	CENTERMAXTOTAL = 240 // 弹性实例数量上限
+	K8SNAMSPACE    string // K8S命名空间
+	K8SCONFIGPATH  string // K8S配置文件地址
+	MYSQLHOST      string // MYSQL服务地址
+	MYSQLPORT      string // MYSQL服务端口
+	MYSQLUSER      string // MYSQL服务用户
+	MYSQLPASSWORD  string // MYSQL服务密码
+	MYSQLDATABASE  string // MYSQL服务数据库
+	SCALERATIO     int    // 缩放比例
+	HUADONGTOTAL   int    // 华东实例总数
+	CENTERCAPACITY int    // 弹性实例数量上限
 )
 
 func init() {
@@ -71,5 +70,12 @@ func init() {
 		log.Fatal("Failed to get number of total instances in huadong from env")
 	} else if HUADONGTOTAL == 0 {
 		log.Fatal("Number of total instances in huadong cannot be zero")
+	}
+
+	CENTERCAPACITY, err = strconv.Atoi(os.Getenv("CENTER_CAPACITY"))
+	if err != nil {
+		log.Fatal("Failed to get center capacity in huadong from env")
+	} else if CENTERCAPACITY == 0 {
+		log.Fatal("Number of center capacity in huadong cannot be zero")
 	}
 }
