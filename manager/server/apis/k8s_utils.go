@@ -262,14 +262,14 @@ func checkInstanceStatus(zoneId string, host string, port int32, instanceName st
 
 func deletePodAndService(podName string, serviceName string) error {
 	var builder strings.Builder
+	if err := k8s_client.TargetClient.CoreV1().Services(config.K8SNAMSPACE).Delete(context.Background(), serviceName, metav1.DeleteOptions{}); err != nil {
+		builder.WriteString(fmt.Sprintf("error deleting service %s: %v.", serviceName, err))
+	}
+
 	if err := k8s_client.TargetClient.CoreV1().Pods(config.K8SNAMSPACE).Delete(context.Background(), podName, metav1.DeleteOptions{
 		GracePeriodSeconds: func() *int64 { t := int64(0); return &t }(),
 	}); err != nil {
 		builder.WriteString(fmt.Sprintf("error deleting pod %s: %v.", podName, err))
-	}
-
-	if err := k8s_client.TargetClient.CoreV1().Services(config.K8SNAMSPACE).Delete(context.Background(), serviceName, metav1.DeleteOptions{}); err != nil {
-		builder.WriteString(fmt.Sprintf("error deleting service %s: %v.", serviceName, err))
 	}
 
 	if builder.Len() == 0 {
