@@ -21,7 +21,6 @@ var (
 )
 
 func Process(zoneId string, siteList []string) error {
-	zoneFixed := int32(0)   // 片区固定资源，即所有边缘站点固定资源总和
 	zoneMissing := int32(0) // 片区还需要的资源实例数，后续需要减掉可用弹性实例
 
 	latestTime := time.Date(2001, 1, 1, 0, 0, 0, 0, time.Local)
@@ -41,6 +40,7 @@ func Process(zoneId string, siteList []string) error {
 				panic(fmt.Sprintf("%s-%s, query date instance failed, err:%v\n", zoneId, siteId, err))
 			}
 			predMap := make(timesnet.PredDataSource)
+			// predMap 是真实值。
 			fmt.Printf("the address of predMap is %v", &predMap)
 			for DateInstanceRows.Next() {
 				var (
@@ -94,16 +94,9 @@ func Process(zoneId string, siteList []string) error {
 				panic(fmt.Sprintf("%s-%s: calc failed, err:%v\n", zoneId, siteId, err))
 			}
 
-			siteCapacity, err := mysqlservice.QuerySiteCapacity(zoneId, siteId)
-			if err != nil {
-				fmt.Printf("%s-%s: query site capacity failed, err:%v\n", zoneId, siteId, err)
-				panic(fmt.Sprintf("%s-%s: query site capacity failed, err:%v\n", zoneId, siteId, err))
-			}
-
 			mu.Lock()
 			siteDateTrueInstanceMap[siteId] = predMap
 			fmt.Printf("%s-%s: siteDateTrueInstanceMap value is %v \n", zoneId, siteId, predMap)
-			zoneFixed += siteCapacity
 			zoneMissing += siteMissing
 			mu.Unlock()
 			log.Printf("%s: %d pods needed totally", siteId, int32(maxPred))
@@ -159,23 +152,21 @@ func Process(zoneId string, siteList []string) error {
 				fmt.Printf("%s: update pred instance into bounce record failed, err: %v\n", zoneId, err)
 			}
 		}
-	} else {
-		deployedInstances = zoneFixed
 	}
 
 	newStart := latestTime.Add(1 * time.Minute)
 	TStart = &newStart
 
-	centerAvailableInstances, err := mysqlservice.QueryAvailableInstanceInCenter(zoneId)
-	if err != nil {
-		fmt.Printf("Failed to get available instances in %s center: %v\n", zoneId, err)
-		return err
-	}
-	deployedInstances += zoneMissing - centerAvailableInstances
-
 	if err := manager.Manage(zoneId, zoneMissing); err != nil {
 		fmt.Printf("Failed to apply or release instances in %s center: %v\n", zoneId, err)
 		return err
 	}
+
+	temp, err := mysqlservice.QueryZoneInstances(zoneId)
+	if err != nil {
+		return err
+	}
+	deployedInstances = temp
+
 	return nil
 }
