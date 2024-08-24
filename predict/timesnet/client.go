@@ -20,7 +20,7 @@ import (
 var (
 	path   = "/predict"
 	client = &http.Client{
-		Timeout: 20 * time.Second, // 设置超时时间为10秒
+		Timeout: 600 * time.Second,
 	}
 )
 
