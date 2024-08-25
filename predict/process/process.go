@@ -27,13 +27,27 @@ func Process(zoneId string, siteList []string) error {
 	siteDateTrueInstanceMap := make(map[string]map[string]int32)
 	fmt.Printf("the address of siteDateTrueInstanceMap is %v", &siteDateTrueInstanceMap)
 
+	// 选定最晚的一个时刻。
+	endTime, err := mysqlservice.QueryLatestDateFromRecord(zoneId)
+	if err != nil {
+		fmt.Printf("QueryLatestDateFromRecord failed, err:%v\n", err)
+		return err
+	}
+	endTimeParsed, err := time.Parse("2006-01-02 15:04:05", endTime)
+	if err != nil {
+		fmt.Println("Error parsing end time:", err)
+		return err
+	}
+	duration := 179 * time.Minute
+	startTime := endTimeParsed.Add(-duration).Format("2006-01-02 15:04:05")
+
 	var wg sync.WaitGroup
 	var mu sync.Mutex
 	for _, siteId := range siteList {
 		wg.Add(1)
 		go func(zoneId string, siteId string) {
 			defer wg.Done()
-			queryDateInstanceSQL := fmt.Sprintf("SELECT site_id, date, instances, login_failures FROM record_%s WHERE site_id = '%s' ORDER BY date DESC LIMIT 180", zoneId, siteId)
+			queryDateInstanceSQL := fmt.Sprintf("SELECT site_id, date, instances, login_failures FROM record_%s WHERE site_id = '%s' AND date BETWEEN %s AND %s", zoneId, siteId, startTime, endTime)
 			DateInstanceRows, err := mysql.DB.Query(queryDateInstanceSQL)
 			if err != nil {
 				fmt.Printf("%s-%s, query date instance failed, err:%v\n", zoneId, siteId, err)

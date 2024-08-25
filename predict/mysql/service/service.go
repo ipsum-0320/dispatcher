@@ -227,3 +227,14 @@ func QueryAvailableInstanceInCenter(zoneId string) (int32, error) {
 	}
 	return count, nil
 }
+
+func QueryLatestDateFromRecord(zoneId string) (string, error) {
+	var date string
+	query := fmt.Sprintf("SELECT date FROM record_%s ORDER BY date DESC LIMIT 1", zoneId)
+	err := mysql.DB.QueryRow(query).Scan(&date)
+
+	if err != nil {
+		return "", err
+	}
+	return date, nil
+}
