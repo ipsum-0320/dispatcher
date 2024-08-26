@@ -25,7 +25,7 @@ func Process(zoneId string, siteList []string) error {
 
 	latestTime := time.Date(2001, 1, 1, 0, 0, 0, 0, time.Local)
 	siteDateTrueInstanceMap := make(map[string]map[string]int32)
-	fmt.Printf("the address of siteDateTrueInstanceMap is %v", &siteDateTrueInstanceMap)
+	// fmt.Printf("the address of siteDateTrueInstanceMap is %v", &siteDateTrueInstanceMap)
 
 	// 选定最晚的一个时刻。
 	endTime, err := mysqlservice.QueryLatestDateFromRecord(zoneId)
@@ -47,8 +47,8 @@ func Process(zoneId string, siteList []string) error {
 		wg.Add(1)
 		go func(zoneId string, siteId string) {
 			defer wg.Done()
-			queryDateInstanceSQL := fmt.Sprintf("SELECT site_id, date, instances, login_failures FROM record_%s WHERE site_id = '%s' AND date BETWEEN %s AND %s", zoneId, siteId, startTime, endTime)
-			DateInstanceRows, err := mysql.DB.Query(queryDateInstanceSQL)
+			queryDateInstanceSQL := fmt.Sprintf("SELECT site_id, date, instances, login_failures FROM record_%s WHERE site_id = ? AND date BETWEEN ? AND ?", zoneId)
+			DateInstanceRows, err := mysql.DB.Query(queryDateInstanceSQL, siteId, startTime, endTime)
 			if err != nil {
 				fmt.Printf("%s-%s, query date instance failed, err:%v\n", zoneId, siteId, err)
 				panic(fmt.Sprintf("%s-%s, query date instance failed, err:%v\n", zoneId, siteId, err))
@@ -110,7 +110,7 @@ func Process(zoneId string, siteList []string) error {
 
 			mu.Lock()
 			siteDateTrueInstanceMap[siteId] = predMap
-			fmt.Printf("%s-%s: siteDateTrueInstanceMap value is %v \n", zoneId, siteId, predMap)
+			// fmt.Printf("%s-%s: siteDateTrueInstanceMap value is %v \n", zoneId, siteId, predMap)
 			zoneMissing += siteMissing
 			mu.Unlock()
 			log.Printf("%s: %d pods needed totally", siteId, int32(maxPred))
