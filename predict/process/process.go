@@ -25,7 +25,6 @@ func Process(zoneId string, siteList []string) error {
 
 	latestTime := time.Date(2001, 1, 1, 0, 0, 0, 0, time.Local)
 	siteDateTrueInstanceMap := make(map[string]map[string]int32)
-	// fmt.Printf("the address of siteDateTrueInstanceMap is %v", &siteDateTrueInstanceMap)
 
 	// 选定最晚的一个时刻。
 	endTime, err := mysqlservice.QueryLatestDateFromRecord(zoneId)
@@ -55,7 +54,8 @@ func Process(zoneId string, siteList []string) error {
 			}
 			predMap := make(timesnet.PredDataSource)
 			// predMap 是真实值。
-			fmt.Printf("the address of predMap is %v", &predMap)
+			count := 0
+			// count 用来记录结果集数目。
 			for DateInstanceRows.Next() {
 				var (
 					siteId         string
@@ -76,8 +76,15 @@ func Process(zoneId string, siteList []string) error {
 				if latestTime.Before(dateTime) {
 					latestTime = dateTime
 				}
+				_, ok := predMap[date]
+				if ok {
+					fmt.Printf("%s-%s: the date is dup: %v\n", zoneId, siteId, date)
+				}
 				predMap[date] = instances + login_failures
+				count++
 			}
+			fmt.Printf("%s-%s: DateInstanceRows len is: %v\n", zoneId, siteId, count)
+			fmt.Printf("%s-%s: predict map date instance: %v, the len is %d\n", zoneId, siteId, predMap, len(predMap))
 			if err := DateInstanceRows.Err(); err != nil {
 				fmt.Printf("%s-%s: error during date instance iteration: %v\n", zoneId, siteId, err)
 				panic(fmt.Sprintf("%s-%s: error during date instance iteration: %v\n", zoneId, siteId, err))
@@ -110,7 +117,7 @@ func Process(zoneId string, siteList []string) error {
 
 			mu.Lock()
 			siteDateTrueInstanceMap[siteId] = predMap
-			// fmt.Printf("%s-%s: siteDateTrueInstanceMap value is %v \n", zoneId, siteId, predMap)
+			fmt.Printf("%s-%s: siteDateTrueInstanceMap value is %v \n", zoneId, siteId, predMap)
 			zoneMissing += siteMissing
 			mu.Unlock()
 			log.Printf("%s: %d pods needed totally", siteId, int32(maxPred))
