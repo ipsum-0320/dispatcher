@@ -95,6 +95,14 @@ func podFactory(
 				},
 			},
 			RestartPolicy: corev1.RestartPolicyAlways,
+			Tolerations: []corev1.Toleration{
+				{
+					Key:      "test",
+					Operator: corev1.TolerationOpEqual,
+					Value:    "true",
+					Effect:   corev1.TaintEffectNoSchedule,
+				},
+			},
 		},
 	}
 }
