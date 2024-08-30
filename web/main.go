@@ -2,13 +2,14 @@ package main
 
 import (
 	"fmt"
-	"github.com/gorilla/mux"
 	"net/http"
+
+	"github.com/gorilla/mux"
 )
 
 func main() {
 	r := mux.NewRouter()
 	r.PathPrefix("/").Handler(http.StripPrefix("/", http.FileServer(http.Dir("./"))))
-	fmt.Printf("Starting server at http://10.10.103.51:8080\n")
-	http.ListenAndServe("10.10.103.51:8080", r)
+	fmt.Printf("Starting server at http://0.0.0.0:5678\n")
+	http.ListenAndServe("0.0.0.0:5678", r)
 }
